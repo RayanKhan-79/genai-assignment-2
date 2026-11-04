@@ -139,6 +139,22 @@ uv run python -m trialmatch.evaluate --split val --model finetuned \
 Outputs: `results/val_base_hf.json`, `results/val_finetuned_hf.json`, the matching
 `*_predictions.jsonl`, and confusion matrices in `report/figures/`.
 
+### Job 4 - test evaluation, exactly once (about 10-20 min)
+
+Run this only after jobs 1 and 3 look right. The guard refuses the test split without `--final`, and
+the report must never be tuned on it. The fine-tuned command also writes the error analysis, so the
+test split is decoded only once.
+
+```bash
+uv run python -m trialmatch.evaluate --split test --model base --final
+uv run python -m trialmatch.evaluate --split test --model finetuned \
+    --adapter /content/drive/MyDrive/trialmatch/adapter --final --errors
+```
+
+Outputs: `results/test_base_hf.json`, `results/test_finetuned_hf.json`, their
+`*_predictions.jsonl`, confusion matrices in `report/figures/`, and `results/error_cases.md`
+(at least 12 failures with note, criterion, gold and prediction).
+
 ### Job 5 - benchmarks (about 10-25 min total, run after the Phase 6 code lands)
 
 ```bash
@@ -162,6 +178,18 @@ uv run python -m trialmatch.evaluate --split val --model finetuned \
     --adapter /content/drive/MyDrive/trialmatch/adapter --decode cached
 ```
 
+### Job 6 - upload the adapter to the Hugging Face Hub (about 2 min)
+
+```bash
+uv run hf auth login                      # or export HF_TOKEN from Colab secrets
+uv run hf upload RayanKhan-79/genai-assignment-2 \
+    /content/drive/MyDrive/trialmatch/adapter
+```
+
+The repository must match `constants.ADAPTER_REPO` (`RayanKhan-79/genai-assignment-2`); the app
+downloads it there when no local adapter is present. Model page:
+<https://huggingface.co/RayanKhan-79/genai-assignment-2>.
+
 ### Local wiring checks (agent-side, never committed as results)
 
 ```bash
@@ -172,7 +200,23 @@ uv run python -m trialmatch.app --smoke                         # both UI tabs, 
 
 ## Results
 
-TODO(phase-9): table filled only from files in `results/`.
+Every number in the report comes from a file listed here; the table stays `TODO(user)` until the
+corresponding Colab job has run and the file is committed.
+
+| Item | Backing file | Status |
+|------|--------------|--------|
+| Fine-tuning log and curves | `results/train_log.json`, `report/figures/train_curves.pdf` | TODO(user) job 1 |
+| Validation, base vs fine-tuned | `results/val_base_hf.json`, `results/val_finetuned_hf.json` | TODO(user) job 3 |
+| Test, base vs fine-tuned (once) | `results/test_*.json`, `results/error_cases.md` | TODO(user) job 4 |
+| Decoding benchmark | `results/bench_decoding.json` | TODO(user) job 5 |
+| Attention benchmark | `results/bench_attention.json` | TODO(user) job 5 |
+| Speculative benchmark | `results/bench_speculative.json` | TODO(user) job 5 |
+| Adapter | <https://huggingface.co/RayanKhan-79/genai-assignment-2> | TODO(user) job 6 |
+| Demo video (5-7 min) | TODO(user) link | TODO(user) |
+| App screenshots | `report/figures/app_*.png` | TODO(user) |
+
+The split manifest is `splits/split_manifest.json` (37/8/8 patients, seed 42) and the truncation
+analysis is `results/truncation_report.json`.
 
 ## Documentation
 

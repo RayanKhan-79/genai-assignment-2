@@ -1,0 +1,484 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{amsmath,amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{url}
+
+% Placeholder for values that come from Colab runs (see PROGRESS.md). Replace every occurrence
+% before submission; never type a number that is not in results/*.json.
+\newcommand{\pending}[1]{\textcolor{red}{TODO(user): #1}}
+
+% Insert a figure when it exists, otherwise draw a labelled placeholder. This keeps the skeleton
+% compilable on Overleaf before the long jobs have produced the PDFs.
+\newcommand{\pendingfigure}[2]{%
+  \IfFileExists{#1}%
+    {\includegraphics[width=\linewidth]{#1}}%
+    {\fbox{\parbox[c][0.22\textheight][c]{0.92\linewidth}{\centering\small #2}}}%
+}
+
+\begin{document}
+
+\title{Criterion-Level Clinical Trial Screening with a Fine-Tuned Qwen LoRA:\\
+KV-Cached Decoding, Tiled Attention and Speculative Decoding}
+
+\author{\IEEEauthorblockN{Rayan Khan}
+\IEEEauthorblockA{GenAI Assignment 2\\Email: rayankhannexus@gmail.com}}
+
+\maketitle
+
+\begin{abstract}
+We study criterion-level patient-to-trial screening with a small instruction-tuned language model.
+Given a patient note and one eligibility criterion, the model returns a label from the criterion's
+legal label set together with the patient-sentence identifiers that support the decision; the
+explanations shown to users are generated deterministically from the label and the cited sentences,
+never by the model. We fine-tune Qwen2.5-1.5B-Instruct with a low-rank adapter on the TrialGPT
+criterion annotations~\cite{jin2024trialgpt} and evaluate classification and evidence quality on a
+patient-level split. On top of the fine-tuned model we implement three inference components from
+scratch: an explicit KV-cache decoding loop with a loop-free reference, a tiled attention kernel
+with an online softmax~\cite{milakov2018online,dao2022flashattention}, and greedy speculative
+decoding with a 0.5B draft model~\cite{leviathan2023speculative,chen2023speculative}. All three are
+tested for exact equivalence against their references and benchmarked on a T4 GPU. A Gradio
+application exposes screening, report export and a live decoder comparison.
+\end{abstract}
+
+\begin{IEEEkeywords}
+clinical trial screening, parameter-efficient fine-tuning, LoRA, KV cache, tiled attention,
+speculative decoding, large language models.
+\end{IEEEkeywords}
+
+\section{Introduction}
+Recruiting participants for clinical trials is slow and expensive, and a large share of the effort
+is spent reading free-text patient notes against long lists of eligibility criteria. Large language
+models (LLMs) can draft criterion-level judgements, but three practical questions remain: how well a
+small locally runnable model can do after parameter-efficient fine-tuning, whether its decisions can
+be audited through cited evidence, and whether the inference tricks used in production systems are
+worth their complexity at this scale.
+
+This paper answers those questions for a single-criterion formulation. A note and one criterion are
+rendered into a chat prompt; the model must reply with one JSON object
+\texttt{\{"label": ..., "evidence\_ids": [...]\}}. The label set depends on whether the criterion is
+an inclusion or an exclusion criterion, and evidence identifiers refer to the numbered sentences of
+the note exactly as they appear in the dataset. GPT-4 annotations that accompany the dataset are
+discarded at load time, so no distillation signal from the proprietary model is used.
+
+Our contributions are:
+\begin{itemize}
+  \item a Qwen2.5-1.5B LoRA model for criterion-level screening, trained with completion-only loss
+        on 603 examples and evaluated on a held-out patient-level split;
+  \item a from-scratch KV-cached decoder, verified token-identical to an uncached reference, and a
+        wall-clock study of cache, attention and speculative decoding on a T4 GPU;
+  \item a tiled attention implementation with a running softmax maximum and normaliser, checked
+        against a full-matrix reference and PyTorch SDPA;
+  \item a lossless greedy speculative decoder with a 0.5B draft model that reports acceptance rate
+        and the resulting speedup \emph{or slowdown};
+  \item an application with a persistent educational disclaimer, deterministic explanations,
+        downloadable reports and a live decoder-comparison tab.
+\end{itemize}
+
+\section{Related Work}
+TrialGPT~\cite{jin2024trialgpt} introduced an end-to-end zero-shot pipeline for patient-to-trial
+matching and released the criterion annotations used here; its matching module reports 87.3\%
+accuracy on 1{,}015 patient--criterion pairs with human evaluation. We keep the criterion-level
+formulation but fine-tune a much smaller open model and constrain the output to a compact JSON
+schema so that evidence can be verified automatically.
+
+LoRA~\cite{hu2022lora} freezes the base weights and learns low-rank updates, which makes fine-tuning
+a 1.5B model feasible on a single 16\,GB GPU. The base model is Qwen2.5-1.5B-Instruct from the
+Qwen2.5 family~\cite{yang2024qwen25}, whose 0.5B sibling serves as the speculative draft.
+
+Our inference work builds on the transformer architecture~\cite{vaswani2017attention}, on
+FlashAttention's tiling idea~\cite{dao2022flashattention} and on the online normaliser used inside
+it~\cite{milakov2018online}. Speculative decoding was proposed independently by
+Leviathan et al.~\cite{leviathan2023speculative} and Chen et al.~\cite{chen2023speculative}; both
+preserve the target distribution, and the greedy variant we implement preserves the target's exact
+token sequence.
+
+\section{Materials and Methods}
+
+\subsection{Dataset and splits}
+We use \texttt{ncbi/TrialGPT-Criterion-Annotations}, which contains 1{,}015 annotated
+patient--criterion pairs from 53 patients and 103 trials. Each row carries the patient note, the
+criterion type and text, the expert label and the expert evidence sentence identifiers. Notes are
+pre-numbered from zero; we verified that numbering is consecutive on all 53 patients. The four
+legal labels per criterion type and their counts are summarised in Table~\ref{tab:data}.
+
+Splitting is performed at the \emph{patient} level with seed 42, giving 37/8/8 patients and
+603/206/206 rows for training, validation and test. Patient-level splitting prevents the same note
+from appearing in two splits. The test split is evaluated exactly once, after all model selection,
+through a guarded \texttt{-{}-final} flag.
+
+\begin{table}[t]
+\centering
+\caption{Dataset summary and expert label distribution. Counts are computed from the loader; the
+split is frozen in \texttt{splits/split\_manifest.json}.}
+\label{tab:data}
+\begin{tabular}{lr}
+\toprule
+Property & Value \\
+\midrule
+Annotated pairs & 1{,}015 \\
+Patients / trials & 53 / 103 \\
+Train / validation / test rows & 603 / 206 / 206 \\
+\midrule
+Inclusion: included & 150 \\
+Inclusion: not included & 23 \\
+Inclusion: not enough information & 174 \\
+Inclusion: not applicable & 9 \\
+Exclusion: excluded & 10 \\
+Exclusion: not excluded & 484 \\
+Exclusion: not enough information & 119 \\
+Exclusion: not applicable & 46 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Task, prompt and target}
+For one criterion we render the numbered note sentences, the criterion type and text, and the legal
+label set into a user message; a fixed system message states that the answer must be one JSON
+object. The supervised target is compact JSON with sorted evidence identifiers,
+e.g.\ \texttt{\{"label": "included", "evidence\_ids": [2, 5]\}}. Tokens belonging to the prompt are
+masked out of the loss, so the model is trained only on its own completion.
+
+Evidence identifiers outside the note are dropped by the parser, and an answer whose label is not in
+the legal set for that criterion type is recorded as \texttt{invalid} and counted as wrong in every
+metric. The parser first attempts a strict JSON decode, then recovers the largest brace-delimited
+object, then falls back to regex extraction; repaired answers are flagged so the error analysis can
+separate formatting failures from reasoning failures.
+
+\subsection{Base model and fine-tuning}
+The base model is Qwen2.5-1.5B-Instruct. We attach a LoRA adapter to all attention and MLP
+projections and train for three epochs with the hyper-parameters in Table~\ref{tab:hparams}. The
+only preprocessing beyond chat templating is truncation at 2{,}048 tokens; a separate analysis
+showed that no training example exceeds 595 prompt-plus-target tokens, so no supervision is lost.
+Training logs and curves are written to \texttt{results/train\_log.json} and
+\texttt{report/figures/train\_curves.pdf}.
+
+\begin{table}[t]
+\centering
+\caption{LoRA fine-tuning hyper-parameters (values fixed in \texttt{constants.py}).}
+\label{tab:hparams}
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+LoRA rank / alpha / dropout & 16 / 32 / 0.05 \\
+Target modules & all attention and MLP projections \\
+Learning rate / schedule & $2\times10^{-4}$ / cosine \\
+Epochs / batch / accumulation & 3 / 2 / 8 \\
+Weight decay / grad clip & 0.01 / 1.0 \\
+Precision & fp16 on CUDA \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Screening pipeline and aggregation}
+For a new note and a list of criteria, the pipeline renders one prompt per criterion and calls the
+same greedy decoder used in evaluation. Each prediction becomes a row with the criterion, its type,
+the predicted label, the evidence identifiers, the quoted evidence sentences and a deterministic
+explanation template. A separate aggregator produces a \emph{preliminary} patient-level outcome:
+\texttt{not applicable} criteria are ignored; any inclusion \texttt{not included} or exclusion
+\texttt{excluded} gives \emph{Likely ineligible}; any \texttt{not enough information} or
+unparseable label gives \emph{Needs more information}; and only when every inclusion is
+\texttt{included} and every exclusion is \texttt{not excluded} is the result \emph{Likely eligible}.
+This rule is stated in the exported report; it is a heuristic, not a clinical decision.
+
+\subsection{KV-cached greedy decoding}
+The reference decoder re-runs the full sequence at every step with the cache disabled. The cached
+decoder performs one prefill and then feeds one token per step while growing a
+\texttt{DynamicCache}. Because rotary positions are absolute, the incremental step passes the cache
+length as its position; the attention mask covers every cached position plus the new one. Greedy
+decoding makes the two paths token-identical in exact arithmetic; in fp16 the reduced shapes can
+change the last bits, so the benchmark reports any real-model mismatches instead of assuming
+equality. Algorithm~\ref{alg:cached} states the loop.
+
+\begin{algorithm}[t]
+\caption{KV-cached greedy decoding}
+\label{alg:cached}
+\begin{algorithmic}[1]
+\Require prompt tokens $x_{1..L}$, budget $N$
+\State $c \gets \emptyset$; $y \gets []$
+\State $(c, \ell) \gets \textsc{Forward}(x_{1..L}, c, \text{positions}=1..L)$
+\For{$i \gets 1$ to $N$}
+  \State $t \gets \arg\max \ell$; append $t$ to $y$
+  \If{$t$ is EOS} \State \textbf{break} \EndIf
+  \State $n \gets \text{length}(c)$
+  \State $(c, \ell) \gets \textsc{Forward}([t], c, \text{positions}=n)$
+\EndFor
+\State \Return $y$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Tiled attention with an online softmax}
+The reference attention materialises the full $T\times T$ score matrix and normalises it with
+\texttt{softmax}. The tiled implementation processes query and key blocks and maintains, per query
+row, a running maximum $m$, a running normaliser $\ell$ and a running accumulator $a$. When a new
+key block raises the maximum, the accumulator and normaliser are rescaled by
+$\exp(m_{\text{old}}-m_{\text{new}})$ before the block's contribution is added, so the final result
+equals the full softmax without ever storing it (Algorithm~\ref{alg:tiled}). Causal masking is
+applied per block, and fully masked rows keep a zero denominator so they yield zeros rather than
+NaNs.
+
+\begin{algorithm}[t]
+\caption{Tiled attention with online softmax (one query block)}
+\label{alg:tiled}
+\begin{algorithmic}[1]
+\Require $Q \in \mathbb{R}^{B\times H\times T\times D}$, $K,V \in \mathbb{R}^{B\times H\times S\times D}$
+\State $m \gets -\infty$, $\ell \gets 0$, $a \gets 0$ \Comment{per query row}
+\For{each key block $K_j, V_j$}
+  \State $S_j \gets QK_j^{\top}/\sqrt{D}$; apply causal mask if enabled
+  \State $m' \gets \max(m, \max(S_j))$
+  \State $p \gets \exp(S_j - m')$
+  \State $a \gets a \cdot \exp(m - m') + pV_j$; $\ell \gets \ell \cdot \exp(m - m') + \sum p$
+  \State $m \gets m'$
+\EndFor
+\State \Return $a / \ell$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Greedy speculative decoding}
+The draft model proposes $\gamma$ tokens with its own cache; the target verifies
+$[\text{pending}, p_1, \dots, p_\gamma]$ in one forward pass, accepts the longest matching prefix and
+appends its own token at the first disagreement. The emitted sequence is exactly the target's greedy
+sequence. Cache bookkeeping is the delicate part: after verification the target drops the rejected
+tail, and the draft drops one fewer position because it never consumed the last proposal; when every
+proposal matched, the draft consumes that last token to stay level. Algorithm~\ref{alg:spec}
+summarises the round. Tokenizers must agree on vocabulary and special tokens, which is asserted
+before generation.
+
+\begin{algorithm}[t]
+\caption{One speculative round}
+\label{alg:spec}
+\begin{algorithmic}[1]
+\Require pending token $t$, draft budget $\gamma$, caches $c_T, c_D$
+\State $q \gets []$; $u \gets t$
+\For{$i \gets 1$ to $\gamma$}
+  \State $(c_D, \ell_D) \gets \textsc{Forward}_D([u], c_D)$; $u \gets \arg\max \ell_D$; append $u$ to $q$
+\EndFor
+\State $(c_T, L) \gets \textsc{Forward}_T([t, q_1, \dots, q_\gamma], c_T)$
+\State $m \gets$ length of longest prefix with $q_i = \arg\max L_i$
+\State \Return $q_{1..m} \parallel [\arg\max L_{m+1}]$, cropping $c_T$ by $\gamma-m$ and $c_D$ accordingly
+\end{algorithmic}
+\end{algorithm}
+
+\section{Experimental Setup and Metrics}
+All fine-tuning and evaluation runs use the T4 GPU available in Colab; local development and unit
+tests run on CPU with tiny random Qwen2 models. Generation is greedy with at most 128 new tokens.
+Classification is reported per criterion type with macro-averaged precision, recall and F1, plus a
+confusion matrix; evidence quality is reported with micro and macro precision, recall and F1, where
+an empty gold set counts as correct only for an empty prediction. Decoding benchmarks report
+latency split into prefill and decode, peak allocated memory and forward-call counts; attention
+benchmarks compare against a full-matrix fp32 reference and PyTorch SDPA; speculative decoding
+reports acceptance rate and speedup against the cached target on eight validation prompts.
+
+\section{Results and Discussion}
+
+\subsection{Fine-tuning and classification}
+Figure~\ref{fig:curves} shows the training and validation loss. Table~\ref{tab:classification}
+compares the base and fine-tuned models on the validation split for both decoding-time variants; the
+test split is reported once in Table~\ref{tab:test}. \pending{fill every cell from
+\texttt{results/val\_*.json} and \texttt{results/test\_*.json}.}
+
+\begin{figure}[t]
+\centering
+\pendingfigure{figures/train_curves.pdf}{Training curves: generated by Colab job 1.}
+\caption{Training and validation loss for the LoRA fine-tune.}
+\label{fig:curves}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\caption{Validation classification results (macro averages).}
+\label{tab:classification}
+\begin{tabular}{llcccc}
+\toprule
+Model & Decode & Prec. & Rec. & F1 & Invalid \\
+\midrule
+Base & hf & \pending{} & \pending{} & \pending{} & \pending{} \\
+Fine-tuned & hf & \pending{} & \pending{} & \pending{} & \pending{} \\
+Fine-tuned & cached & \pending{} & \pending{} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Test-split results, evaluated once with \texttt{-{}-final}.}
+\label{tab:test}
+\begin{tabular}{lcccc}
+\toprule
+Model & Macro F1 & Evidence micro F1 & Invalid rate & $n$ \\
+\midrule
+Base & \pending{} & \pending{} & \pending{} & \pending{} \\
+Fine-tuned & \pending{} & \pending{} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:confusion} shows the confusion matrices; inclusion and exclusion criteria are kept
+separate because their label sets are disjoint. \pending{interpret the dominant confusion pairs.}
+
+\begin{figure}[t]
+\centering
+\pendingfigure{figures/val_finetuned_hf_confusion.pdf}{Confusion matrices: generated by Colab job 3.}
+\caption{Confusion matrices for the fine-tuned model on validation data.}
+\label{fig:confusion}
+\end{figure}
+
+\subsection{Evidence quality and error analysis}
+Table~\ref{tab:evidence} reports evidence precision, recall and F1 under the empty-set rule.
+\pending{summarise whether errors are label errors, evidence errors or both.} The error-analysis
+file \texttt{results/error\_cases.md} lists at least twelve failures with the note, criterion, gold
+label and prediction; Table~\ref{tab:errors} groups them by cause.
+
+\begin{table}[t]
+\centering
+\caption{Evidence-retrieval metrics on validation data.}
+\label{tab:evidence}
+\begin{tabular}{lccc}
+\toprule
+Model & Micro F1 & Macro F1 & Empty-set errors \\
+\midrule
+Base & \pending{} & \pending{} & \pending{} \\
+Fine-tuned & \pending{} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Error categories in the test error analysis.}
+\label{tab:errors}
+\begin{tabular}{lcc}
+\toprule
+Category & Count & Example note \\
+\midrule
+Missed evidence & \pending{} & \pending{} \\
+Over-cited evidence & \pending{} & \pending{} \\
+Label confusion & \pending{} & \pending{} \\
+Unparseable output & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Decoding benchmarks}
+Table~\ref{tab:decoding} and Figure~\ref{fig:decoding} compare uncached and cached greedy decoding
+over input and output lengths. \pending{state the measured speedup and the token-equality result
+from \texttt{results/bench\_decoding.json}.}
+
+\begin{table}[t]
+\centering
+\caption{Decoding latency (seconds, mean of repeated runs).}
+\label{tab:decoding}
+\begin{tabular}{rrcc}
+\toprule
+Input & Output & Uncached & Cached \\
+\midrule
+\pending{} & \pending{} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\pendingfigure{figures/bench_decoding.pdf}{Decoding latency and throughput: generated by job 5.}
+\caption{Uncached versus KV-cached decoding.}
+\label{fig:decoding}
+\end{figure}
+
+\subsection{Attention benchmarks}
+Table~\ref{tab:attention} and Figure~\ref{fig:attention} compare the reference, the tiled kernel and
+the available SDPA backends. \pending{report which backends the T4 exposes and the measured error
+of the tiled kernel against the fp32 reference from \texttt{results/bench\_attention.json}.}
+
+\begin{table}[t]
+\centering
+\caption{Attention latency and maximum absolute error versus the fp32 reference.}
+\label{tab:attention}
+\begin{tabular}{rrccc}
+\toprule
+Length & Reference & Tiled & SDPA (best) & Max error \\
+\midrule
+\pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\pendingfigure{figures/bench_attention.pdf}{Attention latency and memory: generated by job 5.}
+\caption{Attention variants against sequence length.}
+\label{fig:attention}
+\end{figure}
+
+\subsection{Speculative decoding}
+Table~\ref{tab:speculative} and Figure~\ref{fig:speculative} report acceptance rate, forward-call
+counts and speedup or slowdown against the cached target. \pending{interpret the result: if the
+draft is slower than the target on this hardware, say so and explain why.}
+
+\begin{table}[t]
+\centering
+\caption{Speculative decoding on eight validation prompts.}
+\label{tab:speculative}
+\begin{tabular}{cccccc}
+\toprule
+$\gamma$ & Acceptance & Target calls & Draft calls & Latency (s) & Speedup \\
+\midrule
+2 & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+4 & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+6 & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\pendingfigure{figures/bench_speculative.pdf}{Speculative latency and acceptance: job 5.}
+\caption{Speculative decoding versus the cached target.}
+\label{fig:speculative}
+\end{figure}
+
+\subsection{Application}
+Figure~\ref{fig:app} shows the screening tab and the live benchmark tab. \pending{insert the two
+screenshots taken by the user and describe the first-load time on CPU and GPU.}
+
+\begin{figure}[t]
+\centering
+\pendingfigure{figures/app_screening.png}{Screening tab screenshot (user).}
+\pendingfigure{figures/app_benchmark.png}{Benchmark tab screenshot (user).}
+\caption{The Gradio application.}
+\label{fig:app}
+\end{figure}
+
+\section{Limitations}
+The label distribution is highly imbalanced: only ten \texttt{excluded} and twenty-three
+\texttt{not included} examples exist, so the corresponding per-class metrics are noisy and a single
+test run cannot resolve small differences. The aggregation rule is a documented heuristic, not a
+validated clinical decision procedure, and the model has no access to structured laboratory data
+that is absent from the note. Evidence is extracted as sentence identifiers, so a decision can be
+supported by a sentence that is topically related but not sufficient. Finally, all experiments use a
+single seed and one hardware target; the inference benchmarks measure one GPU and should not be
+generalised to other accelerators without repetition.
+
+\section{Conclusion}
+We fine-tuned a 1.5B instruction model for criterion-level trial screening with an auditable JSON
+contract, implemented KV-cached decoding, tiled attention and speculative decoding from scratch, and
+verified each against a reference before benchmarking it. The resulting application exposes
+screening, a deterministic report with a persistent disclaimer, and a live comparison of the three
+decoders. \pending{close with the headline fine-tuning and inference numbers once the Colab jobs
+have run.}
+
+\section*{AI-Use Appendix}
+This project was built with heavy AI assistance, documented honestly in \texttt{docs/AI\_USE.md}.
+The coding agent (OpenCode with a DeepSeek model) wrote the implementation and tests, ran the local
+quality gate and smoke checks, and drafted this skeleton; the human author specified the
+requirements, ran the Colab jobs, verified the results and owns every claim. No result in this paper
+may be reported until it exists in \texttt{results/}.
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}

@@ -1,11 +1,12 @@
 # PROGRESS
 
-Last updated: 2026-11-05T02:10 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-05T02:55 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
-Phase 9 results-independent parts + Phase 8 docs: LaTeX skeleton (`report/main.tex`), `refs.bib`,
-`docs/ARCHITECTURE.md`, `docs/AI_USE.md`, complete the Colab job list (jobs 4 and 6) in README and
-here, push, then **STOP POINT 2**.
+**STOP POINT 2 reached.** All code and all results-independent documentation is done. The user runs
+Colab jobs 3-6 and the remaining user-only tasks listed under "Awaiting user", pushes `results/` and
+`report/figures/`, then the agent fills the report, finishes the error analysis and does the final
+R1-R10 audit.
 
 ## Phase status
 | Phase | Status | Commit/tag | Notes |
@@ -16,9 +17,9 @@ here, push, then **STOP POINT 2**.
 | 4 KV-cached decoding | done | f4cc341 / `phase-4-done` | Decoder ABC, Uncached/Cached loops, decoding benchmark |
 | 5 Attention | done | 82af14b / `phase-5-done` | reference + tiled online softmax, 11 tests, benchmark suite |
 | 6 Speculative decoding | done | f7f6a12 / `phase-6-done` | draft/verify loop with cache re-sync, 13 tests, benchmark suite |
-| 7 Application | done | (commit pending) / `phase-7-done` | pipeline + report exporter + Gradio app, smoke green |
-| 8 Long-running jobs | todo | — | user runs on Colab |
-| 9 Report + docs + hygiene | todo | — | |
+| 7 Application | done | 8365cf6 / `phase-7-done` | pipeline + report exporter + Gradio app, smoke green |
+| 8 Long-running jobs | done (docs) | — commit pending | jobs 1-6 in README + Awaiting user; user runs them |
+| 9 Report + docs + hygiene | in progress | — | LaTeX skeleton, refs.bib, ARCHITECTURE, AI_USE, README done; numbers await jobs 3-6 |
 
 ## Checklist state
 ### Phase 1
@@ -85,14 +86,15 @@ here, push, then **STOP POINT 2**.
 - [x] Self-review, commit, tag `phase-7-done` -> **STOP POINT 2**.
 
 ### Phase 8
-- [ ] Six Colab jobs documented in README + Awaiting user.
+- [x] Six Colab jobs documented in README + Awaiting user — jobs 1-6 with commands, runtimes, outputs and push instructions.
 
 ### Phase 9
-- [ ] `report/main.tex` (IEEEtran, all sections, algorithm blocks).
-- [ ] `refs.bib` >=5 verified real sources.
-- [ ] Numbers only from `results/*.json`; `TODO(user)` where missing.
-- [ ] `docs/DECISIONS.md`, `docs/AI_USE.md`, README complete.
-- [ ] Final gate green, clean tree, no weights committed.
+- [x] `report/main.tex` (IEEEtran, all sections, algorithm blocks) — compiles with conditional figure placeholders.
+- [x] `refs.bib` >=5 verified real sources — 8 entries, each checked against arXiv/publisher pages.
+- [x] Numbers only from `results/*.json`; `TODO(user)` where missing — report contains no invented number.
+- [x] `docs/DECISIONS.md`, `docs/AI_USE.md`, README complete — README has jobs 1-6, results table, app section.
+- [ ] Final gate green, clean tree, no weights committed — gate green; final audit waits for real results.
+- [ ] Fill report numbers from `results/*.json`, interpret every figure/table, finish error analysis (after jobs 3-6).
 
 ## Awaiting user (jobs only the user can run / things needed)
 **STOP POINT 1 - start these now, they do not block Phases 4-7:**
@@ -134,11 +136,20 @@ here, push, then **STOP POINT 2**.
   the same constant token) — wiring check only, real numbers come from Colab job 5.
 - App smoke (0.5B base, CPU/MPS): 2 criteria with KV cache in 1.20 s; live benchmark ran three
   decoders on a 169-token prompt with a 32-token budget; UI config has 37 components.
+- Test suite at STOP POINT 2: 73 tests, mypy --strict clean over 21 source files, ruff clean.
+- arXiv/publisher checks done this session for every entry in `report/refs.bib` (TrialGPT DOI
+  10.1038/s41467-024-53081-z; Qwen2.5 2412.15115; LoRA 2106.09685; FlashAttention 2205.14135;
+  online softmax 1805.02867; Leviathan 2211.17192; Chen 2302.01318; Vaswani 1706.03762).
 
 ## Open problems / blockers
 - None yet.
 
 ## Session log (append-only, newest last)
+- 2026-11-05T02:55 opencode: Phase 8 docs + Phase 9 results-independent parts done. README now has
+  jobs 1-6, the results table and a complete app section; added `docs/ARCHITECTURE.md`,
+  `docs/AI_USE.md`, `report/main.tex` (IEEEtran skeleton, algorithms, all sections, conditional
+  figure placeholders) and `report/refs.bib` (8 citations verified online). Gate green, 73 tests.
+  Stopped at **STOP POINT 2**.
 - 2026-11-05T02:10 opencode: Phase 7 done. `ScreeningPipeline` + `ReportExporter` (Markdown and
   HTML, disclaimer, rule, provenance), `app.py` with lazy merged-adapter target, speculative draft,
   screening tab, live three-decoder benchmark tab and stored-JSON viewer. App smoke green on the

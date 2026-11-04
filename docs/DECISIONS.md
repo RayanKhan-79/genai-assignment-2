@@ -153,3 +153,19 @@ definition rather than against itself. Unsupported SDPA backends are recorded as
 - **Runner reuse.** `GenerationRunner` gained an optional `draft` plus a `speculative` mode, so the
   app, the pipeline and the evaluator share one decoder path; the evaluator's `--decode` choices
   are unchanged.
+
+## D18. Report skeleton and job 4 sequencing (Phase 9, results-independent) — 2026-11-05
+- **No invented numbers.** `report/main.tex` contains only facts backed by committed files (dataset
+  counts, split sizes, hyper-parameters, token limits) and uses a red `\pending{...}` macro for every
+  result cell. The paper must not compile with a fabricated number.
+- **Compiles before the figures exist.** Every `\includegraphics` goes through `\pendingfigure`,
+  which falls back to a labelled box when the PDF/PNG is missing. This lets the skeleton be checked
+  on Overleaf immediately and keeps the real figures as drop-in replacements.
+- **Citations.** Eight sources were verified against arXiv abstract pages or the publisher DOI
+  (TrialGPT, Qwen2.5, LoRA, FlashAttention, online softmax, Leviathan et al., Chen et al., Vaswani
+  et al.); no citation was written from memory.
+- **Test split stays single-pass.** Job 4 attaches `--errors` to the fine-tuned `--final` run, so the
+  test split is decoded exactly once while still producing `results/error_cases.md`; there is no
+  second test invocation just for the error analysis.
+- **README results table** lists the exact backing file for every number and marks it `TODO(user)`
+  until the job has run, which is the checklist the final audit will use.
