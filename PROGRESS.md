@@ -1,10 +1,11 @@
 # PROGRESS
 
-Last updated: 2026-11-05T00:55 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-05T01:25 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
-Phase 6: `src/trialmatch/speculative.py` (greedy speculative decoder with draft model and cache
-cropping), `tests/test_speculative.py`, speculative suite in `benchmark.py`.
+Phase 7: `pipeline.py` (`ScreeningPipeline`, `ReportExporter`), `app.py` (Gradio 6: disclaimer,
+screening tab, benchmark tab, download report, validation), README "Run the app", `--smoke` UI
+check.
 
 ## Phase status
 | Phase | Status | Commit/tag | Notes |
@@ -12,9 +13,9 @@ cropping), `tests/test_speculative.py`, speculative suite in `benchmark.py`.
 | 1 Setup | done | 2223d03 / `phase-1-done` | uv project, deps, ruff/mypy/pytest config, constants skeleton, docs |
 | 2 Data | done | ebf0ba1 / `phase-2-done` | loader, splits, prompts, truncation report |
 | 3 Fine-tuning + evaluation | awaiting-user | 9f3995a / `phase-3-done` | code + smoke green; Colab jobs 1-3 handed to user (STOP POINT 1) |
-| 4 KV-cached decoding | done | (commit pending) / `phase-4-done` | Decoder ABC, Uncached/Cached loops, decoding benchmark |
-| 5 Attention | todo | — | |
-| 6 Speculative decoding | todo | — | |
+| 4 KV-cached decoding | done | f4cc341 / `phase-4-done` | Decoder ABC, Uncached/Cached loops, decoding benchmark |
+| 5 Attention | done | 82af14b / `phase-5-done` | reference + tiled online softmax, 11 tests, benchmark suite |
+| 6 Speculative decoding | done | (commit pending) / `phase-6-done` | draft/verify loop with cache re-sync, 13 tests, benchmark suite |
 | 7 Application | todo | — | ends at STOP POINT 2 |
 | 8 Long-running jobs | todo | — | user runs on Colab |
 | 9 Report + docs + hygiene | todo | — | |
@@ -25,9 +26,9 @@ cropping), `tests/test_speculative.py`, speculative suite in `benchmark.py`.
 - [x] `uv add torch transformers peft datasets accelerate numpy scikit-learn gradio pandas matplotlib huggingface_hub`; `uv add --dev pytest ruff mypy`.
 - [x] Configure in `pyproject.toml`: ruff (format + lint incl. `D`, `I`, `ANN`, `UP`), mypy `strict = true`, pytest.
 - [x] `constants.py` skeleton (paths, seeds, models, labels, training, prompt, decoding, benchmark, tolerances, app, `ADAPTER_REPO`).
-- [ ] `PROGRESS.md`, `docs/DECISIONS.md`, README skeleton, `.gitignore`.
-- [ ] Record dependency versions in `Facts discovered`.
-- [ ] First commit + tag `phase-1-done`; add GitHub remote.
+- [x] `PROGRESS.md`, `docs/DECISIONS.md`, README skeleton, `.gitignore`.
+- [x] Record dependency versions in `Facts discovered`.
+- [x] First commit + tag `phase-1-done`; add GitHub remote.
 
 ### Phase 2
 - [x] `AnnotationLoader.load()` drops every `gpt4_*` / `explanation_correctness` field.
@@ -36,7 +37,7 @@ cropping), `tests/test_speculative.py`, speculative suite in `benchmark.py`.
 - [x] `PromptBuilder` (system + numbered sentences + criterion + schema; compact JSON target).
 - [x] Truncation analysis -> `results/truncation_report.json`.
 - [x] `uv run python -m trialmatch.data --summary` runs.
-- [ ] Self-review, commit, tag `phase-2-done`.
+- [x] Self-review, commit, tag `phase-2-done`.
 
 ### Phase 3
 - [x] `ModelLoader` (base/adapter/merged, device+dtype) — `modeling.py`, smoke-tested.
@@ -69,11 +70,11 @@ cropping), `tests/test_speculative.py`, speculative suite in `benchmark.py`.
 - [x] Self-review, commit, tag `phase-5-done`.
 
 ### Phase 6
-- [ ] `SpeculativeDecoder` (tokenizer equality assert, greedy accept/reject, cache cropping).
-- [ ] Acceptance-rate and latency metrics.
-- [ ] Tests: exact equality with greedy target for gamma in {1,3,5}.
-- [ ] Benchmark -> `results/bench_speculative.json` + figure.
-- [ ] Self-review, commit, tag `phase-6-done`.
+- [x] `SpeculativeDecoder` (tokenizer equality assert, greedy accept/reject, cache cropping) — `speculative.py`, docstring states the cache invariant.
+- [x] Acceptance-rate and latency metrics — `SpeculativeStats` (+ `GenerationResult.stats`).
+- [x] Tests: exact equality with greedy target for gamma in {1,3,5} — `tests/test_speculative.py` (13 tests: lossless, full-acceptance cache alignment, EOS, tokenizer mismatch).
+- [x] Benchmark -> `results/bench_speculative.json` + figure — smoke verified (tokens equal, HF `assistant_model` prefix check matches); real run = Colab job 5.
+- [x] Self-review, commit, tag `phase-6-done`.
 
 ### Phase 7
 - [ ] `ScreeningPipeline.screen()`.
@@ -128,11 +129,19 @@ cropping), `tests/test_speculative.py`, speculative suite in `benchmark.py`.
   (0.5B, 4 val records, MPS) = 0.69 s/record, 100% strict JSON with the final prompt.
 - Only 10 `excluded` and 23 `not included` examples exist, so those classes are rare; macro-F1
   over 4 classes per criterion type will be noisy on val/test (206 rows each).
+- Speculative smoke (tiny 2-layer target, 1-layer draft, CPU): tokens equal to cached target,
+  `assistant_model` prefix check matches, gamma=2 gives 1.0 acceptance (both random models emit
+  the same constant token) — wiring check only, real numbers come from Colab job 5.
 
 ## Open problems / blockers
 - None yet.
 
 ## Session log (append-only, newest last)
+- 2026-11-05T01:25 opencode: Phase 6 done. `speculative.py` (gamma budget, one target forward per
+  round, cache crop by rejected proposals, one extra draft step on full acceptance, tokenizer
+  equality check), 13 tests. Benchmark suite wired: 8 val prompts, gammas 2/4/6, fixed 128-token
+  budget, acceptance/speedup/latency/memory, HF `assistant_model` cross-check. Smoke green
+  (67 tests, tokens equal). Next: Phase 7.
 - 2026-11-04T23:40 opencode: Phase 2-3 done. Phase 2: dataset inspected (facts above),
   `data.py` + `tests/test_data.py`, split manifest, truncation report. Phase 3: `schema.py`,
   `modeling.py`, `train.py`, `evaluate.py`, `pipeline.py` (aggregator) + tests. Smoke runs green:

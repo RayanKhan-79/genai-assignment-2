@@ -110,3 +110,23 @@ is exactly zero by construction and every other variant is measured against the 
 definition rather than against itself. Unsupported SDPA backends are recorded as
 `{"supported": false}` instead of being silently skipped, so the T4 report can state which backends
 (typically FlashAttention) are unavailable.
+
+## D16. Speculative decoding benchmark protocol (Phase 6) — 2026-11-05
+- **Fixed budget, no EOS stop.** The benchmark decodes `max_new_tokens` (default 128) on every prompt
+  for the cached baseline and every gamma, so throughput compares the same amount of token work.
+  Losslessness is checked per prompt against the cached target's full sequence; any divergence is
+  recorded (`tokens_equal`, `mismatched_prompts`) instead of being averaged away.
+- **Models.** Target = fine-tuned 1.5B with the adapter merged (needed for the hand-written cache);
+  draft = `Qwen/Qwen2.5-0.5B-Instruct`, whose tokenizer is asserted identical (vocab + special
+  tokens). The optional draft LoRA from PLAN is not used: acceptance rate is already measurable with
+  the base draft and the extra Colab job was not worth the time budget.
+- **Load.** 8 validation prompts (`--prompts`), gammas 2/4/6 (`BenchmarkConfig.speculative_gammas`).
+  Each decoder warms up on the first prompt `warmup_runs` times, then every prompt is timed once;
+  mean/std are across prompts, which keeps the Colab job to a few minutes while n=8 is enough for a
+  clear speedup/slowdown statement.
+- **Independent reference.** One prompt is also decoded with Hugging Face's
+  `generate(assistant_model=draft)`. HF stops at EOS while the benchmark does not, so the check
+  compares the common prefix and reports both lengths; a prefix mismatch means the hand-written
+  loop is not greedy.
+- **Statistics field.** `GenerationResult.stats` is optional and typed through a `TYPE_CHECKING`
+  import so `decoding.py` does not import `speculative.py` at runtime (no cycle).

@@ -180,6 +180,7 @@ class BenchmarkConfig:
     attention_heads: int = 8
     attention_head_dim: int = 64
     speculative_gammas: tuple[int, ...] = (2, 4, 6)
+    speculative_prompts: int = 8
     warmup_runs: int = 2
     timed_runs: int = 5
 

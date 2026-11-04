@@ -12,18 +12,26 @@ import json
 import statistics
 import time
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
 import torch
 from torch.nn.attention import SDPBackend, sdpa_kernel
 from torch.nn.functional import scaled_dot_product_attention
-from transformers import PreTrainedModel, Qwen2Config, Qwen2ForCausalLM
+from transformers import (
+    PreTrainedModel,
+    PreTrainedTokenizerBase,
+    Qwen2Config,
+    Qwen2ForCausalLM,
+)
 
 from trialmatch import constants as c
 from trialmatch.attention import ReferenceAttention, TiledAttention
-from trialmatch.decoding import Decoder, DecoderFactory, Timing, UncachedDecoder
+from trialmatch.data import AnnotationLoader, PromptBuilder, PromptEncoder, SplitManager
+from trialmatch.decoding import CachedDecoder, Decoder, DecoderFactory, Timing, UncachedDecoder
 from trialmatch.modeling import LoadedModel, ModelLoader
+from trialmatch.speculative import SpeculativeDecoder
 
 
 class Statistics:
@@ -325,13 +333,217 @@ class AttentionPlotter:
         plt.close(figure)
 
 
+class SpeculativeBenchmark:
+    """Compare KV-cached target decoding with speculative decoding for several gammas.
+
+    Every configuration decodes a fixed token budget with no EOS stop, so throughput is measured on
+    exactly the same token work; the cached target output is the ground truth and any divergence is
+    reported rather than hidden. One prompt is also decoded with Hugging Face's assisted generation
+    (``assistant_model``) as an independent cross-check of the hand-written draft/verify loop.
+    """
+
+    def __init__(
+        self,
+        target: PreTrainedModel,
+        draft: PreTrainedModel,
+        device: torch.device,
+        prompts: Sequence[Sequence[int]],
+        config: c.BenchmarkConfig,
+        max_new_tokens: int,
+        tokenizers: tuple[PreTrainedTokenizerBase, PreTrainedTokenizerBase] | None = None,
+        target_label: str = "target",
+        draft_label: str = "draft",
+    ) -> None:
+        """Store both models, the validation prompts and the gamma grid."""
+        if not prompts:
+            raise ValueError("speculative benchmark needs at least one prompt")
+        self._target = target
+        self._draft = draft
+        self._device = device
+        self._prompts = prompts
+        self._config = config
+        self._max_new_tokens = max_new_tokens
+        self._tokenizers = tokenizers
+        self._target_label = target_label
+        self._draft_label = draft_label
+
+    def run(self) -> dict[str, Any]:
+        """Time the cached baseline and every gamma, then return the result document."""
+        baseline = CachedDecoder(self._target, eos_token_ids=[], device=self._device)
+        for _ in range(self._config.warmup_runs):
+            baseline.generate(self._prompts[0], self._max_new_tokens)
+        baseline_runs = [baseline.generate(ids, self._max_new_tokens) for ids in self._prompts]
+        baseline_tokens = [run.tokens for run in baseline_runs]
+        baseline_latency = sum(run.latency_s for run in baseline_runs)
+        baseline_document = {
+            "latency_s": Statistics.summarise([run.latency_s for run in baseline_runs]),
+            "total_s": baseline_latency,
+            "total_tokens": sum(len(run.tokens) for run in baseline_runs),
+            "tokens_per_s": (
+                sum(len(run.tokens) for run in baseline_runs) / baseline_latency
+                if baseline_latency
+                else 0.0
+            ),
+        }
+        rows = [
+            self._measure(gamma, baseline_tokens, baseline_latency)
+            for gamma in self._config.speculative_gammas
+        ]
+        return {
+            "suite": "speculative",
+            "target_model": self._target_label,
+            "draft_model": self._draft_label,
+            "device": self._device.type,
+            "dtype": str(next(self._target.parameters()).dtype).replace("torch.", ""),
+            "n_prompts": len(self._prompts),
+            "max_new_tokens": self._max_new_tokens,
+            "gammas": list(self._config.speculative_gammas),
+            "warmup_runs": self._config.warmup_runs,
+            "baseline": baseline_document,
+            "rows": rows,
+            "reference_check": self._reference_check(self._prompts[0], baseline_tokens[0]),
+        }
+
+    def _measure(
+        self, gamma: int, baseline_tokens: Sequence[tuple[int, ...]], baseline_s: float
+    ) -> dict[str, Any]:
+        """Run one gamma over every prompt and aggregate acceptance, latency and equality."""
+        decoder = SpeculativeDecoder(
+            self._target,
+            self._draft,
+            eos_token_ids=[],
+            device=self._device,
+            gamma=gamma,
+            tokenizers=self._tokenizers,
+        )
+        for _ in range(self._config.warmup_runs):
+            decoder.generate(self._prompts[0], self._max_new_tokens)
+        runs = [decoder.generate(ids, self._max_new_tokens) for ids in self._prompts]
+        stats = [run.stats for run in runs]
+        if any(entry is None for entry in stats):
+            raise ValueError("speculative decoder did not report statistics")
+        drafted = sum(entry.drafted for entry in stats if entry is not None)
+        accepted = sum(entry.accepted for entry in stats if entry is not None)
+        rounds = sum(entry.rounds for entry in stats if entry is not None)
+        total_s = sum(run.latency_s for run in runs)
+        tokens = sum(len(run.tokens) for run in runs)
+        mismatches = sum(
+            run.tokens != reference for run, reference in zip(runs, baseline_tokens, strict=True)
+        )
+        return {
+            "gamma": gamma,
+            "latency_s": Statistics.summarise([run.latency_s for run in runs]),
+            "total_s": total_s,
+            "total_tokens": tokens,
+            "tokens_per_s": tokens / total_s if total_s else 0.0,
+            "peak_mem_bytes": max(run.peak_mem_bytes for run in runs),
+            "acceptance_rate": accepted / drafted if drafted else 0.0,
+            "mean_accepted_per_round": accepted / rounds if rounds else 0.0,
+            "rounds": rounds,
+            "target_forward_calls": sum(run.n_forward_calls for run in runs),
+            "draft_forward_calls": sum(
+                entry.draft_forward_calls for entry in stats if entry is not None
+            ),
+            "tokens_equal": mismatches == 0,
+            "mismatched_prompts": mismatches,
+            "speedup": baseline_s / total_s if total_s else 0.0,
+        }
+
+    def _reference_check(
+        self, ids: Sequence[int], baseline_tokens: tuple[int, ...]
+    ) -> dict[str, Any]:
+        """Cross-check one prompt against ``generate(assistant_model=draft)``.
+
+        Hugging Face stops at EOS while the benchmark decodes a fixed budget, so the comparison is
+        on the common prefix; a mismatch there would mean the hand-written loop is not greedy.
+        """
+        inputs = torch.tensor([list(ids)], device=self._device)
+        try:
+            with torch.inference_mode():
+                output = cast(Any, self._target).generate(
+                    inputs,
+                    assistant_model=self._draft,
+                    max_new_tokens=self._max_new_tokens,
+                    do_sample=False,
+                    pad_token_id=0,
+                )
+        except (RuntimeError, ValueError) as error:  # backend or API unavailable
+            return {"supported": False, "reason": str(error)[:200]}
+        tokens = tuple(int(token) for token in output[0, inputs.shape[1] :].tolist())
+        prefix = min(len(tokens), len(baseline_tokens))
+        return {
+            "supported": True,
+            "hf_tokens": len(tokens),
+            "prefix_length": prefix,
+            "matches_prefix": tokens[:prefix] == baseline_tokens[:prefix],
+        }
+
+
+class SpeculativePlotter:
+    """Latency, throughput and acceptance figures for the speculative benchmark."""
+
+    @staticmethod
+    def plot(
+        document: dict[str, Any], path: Path = c.FIGURES_DIR / "bench_speculative.pdf"
+    ) -> None:
+        """Draw latency and acceptance rate per gamma against the cached baseline."""
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        rows = document["rows"]
+        labels = [f"gamma={row['gamma']}" for row in rows]
+        figure, (left, right) = plt.subplots(1, 2, figsize=(10, 3.8))
+        left.bar(labels, [row["latency_s"]["mean"] for row in rows], color="#4c72b0")
+        left.axhline(
+            document["baseline"]["latency_s"]["mean"],
+            linestyle="--",
+            color="black",
+            label="cached target",
+        )
+        left.set_ylabel("latency per prompt (s)")
+        left.set_title("Speculative decoding latency")
+        left.legend(fontsize=8)
+        right.bar(labels, [100.0 * row["acceptance_rate"] for row in rows], color="#55a868")
+        for index, row in enumerate(rows):
+            right.text(
+                index,
+                100.0 * row["acceptance_rate"],
+                f"{row['speedup']:.2f}x",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+        right.set_ylabel("accepted drafts (%)")
+        right.set_title("Acceptance rate (speedup vs cached)")
+        for axis in (left, right):
+            axis.grid(alpha=0.3, axis="y")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        figure.tight_layout()
+        figure.savefig(path)
+        plt.close(figure)
+
+
 class Benchmarker:
     """Load the model once and dispatch to the requested suite."""
 
-    def __init__(self, model_name: str = c.BASE_MODEL_NAME, smoke: bool = False) -> None:
-        """Store the model choice; ``smoke`` builds a tiny random model instead of downloading."""
+    def __init__(
+        self,
+        model_name: str = c.BASE_MODEL_NAME,
+        smoke: bool = False,
+        target_tag: str = c.MODEL_TAG_BASE,
+        adapter: str | Path | None = None,
+        prompts: int | None = None,
+        max_new_tokens: int | None = None,
+    ) -> None:
+        """Store the model choices; ``smoke`` builds tiny random models instead of downloading."""
         self._model_name = model_name
         self._smoke = smoke
+        self._target_tag = target_tag
+        self._adapter = adapter
+        self._prompts = prompts or c.BENCHMARK.speculative_prompts
+        self._max_new_tokens = max_new_tokens or c.GENERATION.max_new_tokens
 
     def run(self, suite: str) -> Path:
         """Run one suite, write ``results/bench_{suite}.json`` and return its path."""
@@ -344,6 +556,9 @@ class Benchmarker:
             document["model"] = "tiny-random-qwen2" if self._smoke else self._model_name
             document["device"] = device.type
             BenchmarkPlotter.decoding(document, self._figure_root() / "bench_decoding.pdf")
+        elif suite == "speculative":
+            document = self._speculative_setup().run()
+            SpeculativePlotter.plot(document, self._figure_root() / "bench_speculative.pdf")
         else:
             raise ValueError(f"suite {suite!r} is not implemented yet")
         path = self._figure_root() / f"bench_{suite}.json"
@@ -375,18 +590,62 @@ class Benchmarker:
         """Return model, device, vocabulary size and (possibly reduced) grid for the suite."""
         if self._smoke:
             return self._tiny_model()
-        loaded: LoadedModel = ModelLoader(self._model_name, merge_adapter=True).load()
+        loaded: LoadedModel = ModelLoader(
+            self._model_name, adapter=self._adapter, merge_adapter=True
+        ).load()
         return loaded.model, loaded.device, int(loaded.model.config.vocab_size), c.BENCHMARK
 
+    def _speculative_setup(self) -> SpeculativeBenchmark:
+        """Load target and draft, tokenise validation prompts, and build the benchmark."""
+        if self._smoke:
+            target = self._tiny_model()[0]
+            draft = self._tiny_model(seed=c.SEED + 1, layers=1)[0]
+            generator = torch.Generator().manual_seed(c.SEED)
+            prompts = [torch.randint(0, 256, (24,), generator=generator).tolist() for _ in range(2)]
+            tiny = replace(
+                c.BENCHMARK,
+                speculative_gammas=(2,),
+                speculative_prompts=2,
+                warmup_runs=1,
+                timed_runs=1,
+            )
+            return SpeculativeBenchmark(
+                target, draft, torch.device("cpu"), prompts, tiny, max_new_tokens=8
+            )
+
+        loaded = ModelLoader(self._model_name, adapter=self._adapter, merge_adapter=True).load()
+        draft_loaded = ModelLoader(c.DRAFT_MODEL_NAME, device=loaded.device).load()
+        annotations = AnnotationLoader().load()
+        manager = SplitManager()
+        manifest = manager.load() if c.SPLIT_MANIFEST_PATH.exists() else manager.build(annotations)
+        items = manager.assign(annotations, manifest)["val"][: self._prompts]
+        builder = PromptBuilder()
+        encoder = PromptEncoder(loaded.tokenizer)
+        prompts = [encoder.prompt_ids(builder.build(annotation)) for annotation in items]
+        label = f"{self._target_tag}:{self._model_name}"
+        return SpeculativeBenchmark(
+            loaded.model,
+            draft_loaded.model,
+            loaded.device,
+            prompts,
+            c.BENCHMARK,
+            self._max_new_tokens,
+            tokenizers=(loaded.tokenizer, draft_loaded.tokenizer),
+            target_label=label,
+            draft_label=c.DRAFT_MODEL_NAME,
+        )
+
     @staticmethod
-    def _tiny_model() -> tuple[PreTrainedModel, torch.device, int, c.BenchmarkConfig]:
-        """Build a 2-layer random model and a tiny grid for the local smoke check."""
-        torch.manual_seed(c.SEED)
+    def _tiny_model(
+        seed: int = c.SEED, layers: int = 2
+    ) -> tuple[PreTrainedModel, torch.device, int, c.BenchmarkConfig]:
+        """Build a random model and a tiny grid for the local smoke check."""
+        torch.manual_seed(seed)
         config = Qwen2Config(
             vocab_size=256,
             hidden_size=32,
             intermediate_size=64,
-            num_hidden_layers=2,
+            num_hidden_layers=layers,
             num_attention_heads=4,
             num_key_value_heads=2,
             max_position_embeddings=256,
@@ -414,10 +673,32 @@ def main() -> None:
     parser.add_argument(
         "--suite", choices=["decoding", "attention", "speculative"], default="decoding"
     )
-    parser.add_argument("--model", default=c.BASE_MODEL_NAME)
+    parser.add_argument(
+        "--model", choices=[c.MODEL_TAG_BASE, c.MODEL_TAG_FINETUNED], default="base"
+    )
+    parser.add_argument(
+        "--adapter", type=Path, default=None, help="adapter dir for --model finetuned"
+    )
+    parser.add_argument(
+        "--prompts",
+        type=int,
+        default=c.BENCHMARK.speculative_prompts,
+        help="validation prompts used by the speculative suite",
+    )
+    parser.add_argument("--max-new-tokens", type=int, default=c.GENERATION.max_new_tokens)
     parser.add_argument("--smoke", action="store_true", help="tiny random model, tiny grid")
     args = parser.parse_args()
-    path = Benchmarker(args.model, smoke=args.smoke).run(args.suite)
+    adapter = args.adapter
+    if args.model == c.MODEL_TAG_FINETUNED and adapter is None:
+        adapter = c.ADAPTER_DIR if c.ADAPTER_DIR.exists() else c.ADAPTER_REPO
+    path = Benchmarker(
+        c.SMOKE_MODEL_NAME if args.smoke else c.BASE_MODEL_NAME,
+        smoke=args.smoke,
+        target_tag=args.model,
+        adapter=adapter,
+        prompts=args.prompts,
+        max_new_tokens=args.max_new_tokens,
+    ).run(args.suite)
     print(f"wrote {path}")
 
 

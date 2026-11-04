@@ -24,11 +24,14 @@ import time
 from abc import ABC, abstractmethod
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from transformers import Cache, PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutputWithPast
+
+if TYPE_CHECKING:
+    from trialmatch.speculative import SpeculativeStats
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,7 @@ class GenerationResult:
         decode_s: Seconds spent in all subsequent forward passes.
         peak_mem_bytes: CUDA peak allocated memory during the run (0 off CUDA).
         n_forward_calls: Number of model forward passes.
+        stats: Speculative-decoding acceptance statistics, when applicable.
     """
 
     tokens: tuple[int, ...]
@@ -48,6 +52,7 @@ class GenerationResult:
     decode_s: float
     peak_mem_bytes: int
     n_forward_calls: int
+    stats: SpeculativeStats | None = None
 
     @property
     def latency_s(self) -> float:

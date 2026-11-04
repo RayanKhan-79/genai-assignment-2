@@ -118,10 +118,18 @@ Outputs: `results/val_base_hf.json`, `results/val_finetuned_hf.json`, the matchi
 ```bash
 uv run python -m trialmatch.benchmark --suite decoding     # results/bench_decoding.json
 uv run python -m trialmatch.benchmark --suite attention    # results/bench_attention.json
+uv run python -m trialmatch.benchmark --suite speculative \
+    --model finetuned --adapter /content/drive/MyDrive/trialmatch/adapter
 ```
 
-Every suite prints the JSON path and writes its figure to `report/figures/`. Optional equivalence
-check for the hand-written cache (same prompt, same greedy rule, same parser):
+Every suite prints the JSON path and writes its figure to `report/figures/`. The speculative suite
+uses the fine-tuned 1.5B model as the verifier and `Qwen/Qwen2.5-0.5B-Instruct` as the draft
+(identical tokenizer), decodes a fixed token budget on 8 validation prompts, and reports acceptance
+rate, target/draft forward counts, latency and the speedup **or slowdown** against the cached
+target; it also cross-checks one prompt with `generate(assistant_model=draft)`. Tune the load with
+`--prompts N` and `--max-new-tokens N` (defaults 8 and 128). Optional: `train --model draft`
+fine-tunes a draft adapter, but this benchmark uses the base draft. Optional equivalence check for
+the hand-written cache (same prompt, same greedy rule, same parser):
 
 ```bash
 uv run python -m trialmatch.evaluate --split val --model finetuned \
