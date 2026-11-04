@@ -102,3 +102,11 @@ Result filenames always carry the decoding mode, so no two runs can be confused.
 Benchmarks and evaluations run with `--smoke` write under `checkpoints/smoke/` and tag their files
 `smoke-<mode>`; `results/` only ever holds real Colab runs, so every number quoted in the report is
 traceable to a real job.
+
+## D15. Attention benchmark shapes and ground truth (Phase 5) — 2026-11-05
+The suite uses batch 1, 8 heads, head_dim 64 and causal masking (the shape of one decode step at a
+realistic width). Errors are computed against `ReferenceAttention` in **fp32**, so the reference row
+is exactly zero by construction and every other variant is measured against the mathematical
+definition rather than against itself. Unsupported SDPA backends are recorded as
+`{"supported": false}` instead of being silently skipped, so the T4 report can state which backends
+(typically FlashAttention) are unavailable.

@@ -113,6 +113,21 @@ uv run python -m trialmatch.evaluate --split val --model finetuned \
 Outputs: `results/val_base_hf.json`, `results/val_finetuned_hf.json`, the matching
 `*_predictions.jsonl`, and confusion matrices in `report/figures/`.
 
+### Job 5 - benchmarks (about 10-25 min total, run after the Phase 6 code lands)
+
+```bash
+uv run python -m trialmatch.benchmark --suite decoding     # results/bench_decoding.json
+uv run python -m trialmatch.benchmark --suite attention    # results/bench_attention.json
+```
+
+Every suite prints the JSON path and writes its figure to `report/figures/`. Optional equivalence
+check for the hand-written cache (same prompt, same greedy rule, same parser):
+
+```bash
+uv run python -m trialmatch.evaluate --split val --model finetuned \
+    --adapter /content/drive/MyDrive/trialmatch/adapter --decode cached
+```
+
 ### Local wiring checks (agent-side, never committed as results)
 
 ```bash

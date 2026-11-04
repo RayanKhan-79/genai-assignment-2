@@ -10,15 +10,19 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, cast
 
 import torch
+from torch.nn.attention import SDPBackend, sdpa_kernel
+from torch.nn.functional import scaled_dot_product_attention
 from transformers import PreTrainedModel, Qwen2Config, Qwen2ForCausalLM
 
 from trialmatch import constants as c
-from trialmatch.decoding import Decoder, DecoderFactory, UncachedDecoder
+from trialmatch.attention import ReferenceAttention, TiledAttention
+from trialmatch.decoding import Decoder, DecoderFactory, Timing, UncachedDecoder
 from trialmatch.modeling import LoadedModel, ModelLoader
 
 
@@ -148,6 +152,179 @@ class BenchmarkPlotter:
         plt.close(figure)
 
 
+class AttentionBenchmark:
+    """Compare reference, tiled and PyTorch SDPA attention over sequence lengths.
+
+    Errors are measured against the reference implementation computed in fp32, which is the
+    mathematical definition of the operation; the reference itself is therefore exactly zero.
+    """
+
+    def __init__(
+        self,
+        device: torch.device,
+        dtype: torch.dtype,
+        config: c.BenchmarkConfig = c.BENCHMARK,
+    ) -> None:
+        """Store the device, compute dtype and grid configuration."""
+        self._device = device
+        self._dtype = dtype
+        self._config = config
+
+    def run(self) -> dict[str, Any]:
+        """Run every sequence length and return the result document."""
+        rows = [self._measure(length) for length in self._config.attention_lengths]
+        return {
+            "suite": "attention",
+            "device": self._device.type,
+            "dtype": str(self._dtype).replace("torch.", ""),
+            "shape": {
+                "batch": self._config.attention_batch,
+                "heads": self._config.attention_heads,
+                "head_dim": self._config.attention_head_dim,
+                "causal": True,
+            },
+            "block": {"q": self._config.attention_block_q, "k": self._config.attention_block_k},
+            "warmup_runs": self._config.warmup_runs,
+            "timed_runs": self._config.timed_runs,
+            "rows": rows,
+        }
+
+    def _inputs(self, length: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return random Q/K/V of the configured shape on the benchmark device."""
+        generator = torch.Generator().manual_seed(c.SEED)
+        shape = (
+            self._config.attention_batch,
+            self._config.attention_heads,
+            length,
+            self._config.attention_head_dim,
+        )
+        tensors = [
+            torch.randn(shape, generator=generator).to(self._device).to(self._dtype)
+            for _ in range(3)
+        ]
+        return tensors[0], tensors[1], tensors[2]
+
+    def _measure(self, length: int) -> dict[str, Any]:
+        """Time every variant at one sequence length and compare it with the reference."""
+        query, key, value = self._inputs(length)
+        with torch.inference_mode():
+            truth = ReferenceAttention.forward(
+                query.float(), key.float(), value.float(), causal=True
+            )
+        variants: dict[str, Any] = {}
+        for name, call in self._variants(query, key, value):
+            variants[name] = self._time(name, call, truth)
+        return {"length": length, "variants": variants}
+
+    def _variants(
+        self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor
+    ) -> list[tuple[str, Any]]:
+        """Return ``(name, callable)`` pairs for every attention implementation."""
+        tiled = TiledAttention(self._config.attention_block_q, self._config.attention_block_k)
+        variants: list[tuple[str, Any]] = [
+            ("reference", lambda: ReferenceAttention.forward(query, key, value, causal=True)),
+            ("tiled", lambda: tiled.forward(query, key, value, causal=True)),
+        ]
+        for backend, label in (
+            ("MATH", "sdpa_math"),
+            ("EFFICIENT_ATTENTION", "sdpa_efficient"),
+            ("FLASH_ATTENTION", "sdpa_flash"),
+        ):
+            variants.append(
+                (label, self._sdpa_call(query, key, value, getattr(SDPBackend, backend)))
+            )
+        return variants
+
+    @staticmethod
+    def _sdpa_call(
+        query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, backend: SDPBackend
+    ) -> Any:
+        """Wrap ``scaled_dot_product_attention`` in an explicit backend selection."""
+
+        def call() -> torch.Tensor:
+            with sdpa_kernel(backend):
+                return scaled_dot_product_attention(query, key, value, is_causal=True)
+
+        return call
+
+    def _time(self, name: str, call: Any, truth: torch.Tensor) -> dict[str, Any]:
+        """Time one variant, returning ``supported=False`` if the backend refuses to run."""
+        for _ in range(self._config.warmup_runs):
+            try:
+                call()
+            except RuntimeError:
+                return {"supported": False, "reason": "backend unavailable on this device"}
+        latencies: list[float] = []
+        peak = 0
+        error_max = 0.0
+        error_mean = 0.0
+        for _ in range(self._config.timed_runs):
+            Timing.reset_peak_memory()
+            Timing.sync()
+            start = time.perf_counter()
+            with torch.inference_mode():
+                result = call()
+            Timing.sync()
+            latencies.append(time.perf_counter() - start)
+            peak = max(peak, Timing.peak_memory_bytes())
+            difference = (result.float() - truth).abs()
+            error_max = max(error_max, float(difference.max()))
+            error_mean = max(error_mean, float(difference.mean()))
+        return {
+            "supported": True,
+            "latency_s": Statistics.summarise(latencies),
+            "peak_mem_bytes": peak,
+            "max_abs_err": error_max,
+            "mean_abs_err": error_mean,
+        }
+
+
+class AttentionPlotter:
+    """Runtime and memory figures for the attention benchmark."""
+
+    @staticmethod
+    def plot(document: dict[str, Any], path: Path = c.FIGURES_DIR / "bench_attention.pdf") -> None:
+        """Write latency (log-log) and peak memory against sequence length."""
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        figure, (left, right) = plt.subplots(1, 2, figsize=(10, 3.8))
+        names = list(document["rows"][0]["variants"]) if document["rows"] else []
+        for name in names:
+            supported = [row for row in document["rows"] if row["variants"][name]["supported"]]
+            lengths = [row["length"] for row in supported]
+            left.plot(
+                lengths,
+                [row["variants"][name]["latency_s"]["mean"] for row in supported],
+                marker="o",
+                label=name,
+            )
+            right.plot(
+                lengths,
+                [row["variants"][name]["peak_mem_bytes"] / 2**20 for row in supported],
+                marker="o",
+                label=name,
+            )
+        left.set_xlabel("sequence length")
+        left.set_ylabel("latency (s)")
+        left.set_title("Attention latency")
+        left.set_xscale("log", base=2)
+        left.set_yscale("log")
+        right.set_xlabel("sequence length")
+        right.set_ylabel("peak memory (MiB)")
+        right.set_title("Peak allocated memory")
+        right.set_xscale("log", base=2)
+        for axis in (left, right):
+            axis.grid(alpha=0.3, which="both")
+        left.legend(fontsize=7)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        figure.tight_layout()
+        figure.savefig(path)
+        plt.close(figure)
+
+
 class Benchmarker:
     """Load the model once and dispatch to the requested suite."""
 
@@ -158,19 +335,41 @@ class Benchmarker:
 
     def run(self, suite: str) -> Path:
         """Run one suite, write ``results/bench_{suite}.json`` and return its path."""
-        if suite != "decoding":
+        if suite == "attention":
+            document = AttentionBenchmark(*self._attention_setup()).run()
+            AttentionPlotter.plot(document, self._figure_root() / "bench_attention.pdf")
+        elif suite == "decoding":
+            model, device, vocab, config = self._prepare()
+            document = DecodingBenchmark(model, device, vocab, config).run()
+            document["model"] = "tiny-random-qwen2" if self._smoke else self._model_name
+            document["device"] = device.type
+            BenchmarkPlotter.decoding(document, self._figure_root() / "bench_decoding.pdf")
+        else:
             raise ValueError(f"suite {suite!r} is not implemented yet")
-        model, device, vocab, config = self._prepare()
-        document = DecodingBenchmark(model, device, vocab, config).run()
-        document["model"] = "tiny-random-qwen2" if self._smoke else self._model_name
-        document["device"] = device.type
-        # Smoke artefacts stay in the git-ignored checkpoint dir: results/ is for real runs.
-        root = c.CHECKPOINTS_DIR / "smoke" if self._smoke else c.RESULTS_DIR
-        path = root / f"bench_{suite}.json"
+        path = self._figure_root() / f"bench_{suite}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-        BenchmarkPlotter.decoding(document, root / "bench_decoding.pdf")
         return path
+
+    def _figure_root(self) -> Path:
+        """Smoke artefacts stay in the git-ignored checkpoint dir; results/ is for real runs."""
+        return c.CHECKPOINTS_DIR / "smoke" if self._smoke else c.RESULTS_DIR
+
+    def _attention_setup(self) -> tuple[torch.device, torch.dtype, c.BenchmarkConfig]:
+        """Attention needs no weights, only a device, dtype and (tiny) grid."""
+        if self._smoke:
+            _, device, _, _ = self._tiny_model()
+            dtype = torch.float32
+            tiny = c.BenchmarkConfig(
+                attention_lengths=(64, 96),
+                attention_block_q=32,
+                attention_block_k=32,
+                warmup_runs=1,
+                timed_runs=1,
+            )
+            return device, dtype, tiny
+        device, dtype = ModelLoader.resolve_device()
+        return device, dtype, c.BENCHMARK
 
     def _prepare(self) -> tuple[PreTrainedModel, torch.device, int, c.BenchmarkConfig]:
         """Return model, device, vocabulary size and (possibly reduced) grid for the suite."""

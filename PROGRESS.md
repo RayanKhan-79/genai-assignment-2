@@ -1,10 +1,10 @@
 # PROGRESS
 
-Last updated: 2026-11-05T00:20 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-05T00:55 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
-Phase 5: `src/trialmatch/attention.py` (ReferenceAttention, TiledAttention with online softmax),
-`tests/test_attention.py`, attention suite in `benchmark.py`.
+Phase 6: `src/trialmatch/speculative.py` (greedy speculative decoder with draft model and cache
+cropping), `tests/test_speculative.py`, speculative suite in `benchmark.py`.
 
 ## Phase status
 | Phase | Status | Commit/tag | Notes |
@@ -62,11 +62,11 @@ Phase 5: `src/trialmatch/attention.py` (ReferenceAttention, TiledAttention with 
 - [x] Self-review, commit, tag `phase-4-done`.
 
 ### Phase 5
-- [ ] `ReferenceAttention`.
-- [ ] `TiledAttention` online softmax.
-- [ ] Tests: shapes incl. non-multiples, causal/non-causal, fp32/fp16, vs reference + SDPA.
-- [ ] Benchmark vs SDPA backends -> `results/bench_attention.json` + figure.
-- [ ] Self-review, commit, tag `phase-5-done`.
+- [x] `ReferenceAttention` — `attention.py`, `torch.softmax` (documented).
+- [x] `TiledAttention` online softmax — running max/normaliser/accumulator, causal block skip, no NaN.
+- [x] Tests: shapes incl. non-multiples (T=37), causal/non-causal, fp32/fp16, vs reference + SDPA — 11 tests.
+- [x] Benchmark vs SDPA backends -> `results/bench_attention.json` + figure — smoke verified (error <= 1e-6, EFFICIENT_ATTENTION reported unsupported on MPS); real run = Colab job 5.
+- [x] Self-review, commit, tag `phase-5-done`.
 
 ### Phase 6
 - [ ] `SpeculativeDecoder` (tokenizer equality assert, greedy accept/reject, cache cropping).
