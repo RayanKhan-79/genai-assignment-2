@@ -1,0 +1,76 @@
+[project]
+name = "trialmatch"
+version = "0.1.0"
+description = "TrialGPT criterion-matching system: fine-tuned Qwen LoRA screening with hand-written KV-cache, tiled-attention and speculative decoding."
+readme = "README.md"
+authors = [
+    { name = "Rayan Khan", email = "rayankhannexus@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "accelerate>=1.15.0",
+    "datasets>=5.1.0",
+    "gradio>=6.31.0",
+    "huggingface-hub>=2.4.0",
+    "matplotlib>=3.11.2",
+    "numpy>=2.4.6",
+    "pandas>=3.1.0",
+    "peft>=0.21.2",
+    "scikit-learn>=1.9.1",
+    "torch>=2.15.0",
+    "transformers>=5.22.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "ANN", "D", "RUF"]
+ignore = [
+    "D203",   # conflicts with D211 (no blank line before class docstring)
+    "D213",   # conflicts with D212 (multi-line summary position)
+    "ANN401", # Any is occasionally the honest annotation for library payloads
+    "RUF001", # ambiguous unicode in docstrings/comments is harmless here
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D103", "ANN201"]      # test functions need no docstring/return annotation
+"src/trialmatch/constants.py" = ["D101"]  # constants module holds no classes
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["trialmatch"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tests"]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["matplotlib.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
