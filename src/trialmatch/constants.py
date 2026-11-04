@@ -100,8 +100,10 @@ PROMPT_TEMPLATE: Final[str] = (
     "Criterion type: {criterion_type}\n"
     "Criterion: {criterion_text}\n\n"
     "Allowed labels: {labels}\n"
-    'Reply with exactly: {{"label": "<allowed label>", "evidence_ids": [<sentence numbers>]}}\n'
-    "Use [] for evidence_ids when no sentence supports the label."
+    "Answer with exactly one JSON object of the form "
+    '{{"label": "<one of the allowed labels>", "evidence_ids": [<sentence numbers>]}} '
+    "and nothing else. List the sentence numbers that directly support the label; leave the "
+    "evidence list empty when no sentence supports it."
 )
 #: One numbered sentence inside :data:`PROMPT_TEMPLATE`.
 SENTENCE_TEMPLATE: Final[str] = "[{index}] {text}"

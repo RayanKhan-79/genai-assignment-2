@@ -60,7 +60,65 @@ TODO(phase-7): first-load time, CPU/GPU notes, local-adapter instructions.
 
 ## Long-running jobs (run on Colab T4)
 
-TODO(phase-3+): Colab setup cell, jobs 1-6 with commands, runtimes and outputs.
+Nothing in this section may be run locally: each job takes longer than 10 minutes on the target
+task (rule R8). Only `--smoke` variants are run by the agent.
+
+### Colab setup cell (once per session)
+
+```python
+# Runtime -> Change runtime type -> T4 GPU
+!pip install uv                      # the only allowed pip use: it bootstraps uv
+!git clone https://github.com/RayanKhan-79/genai-assignment-2
+%cd genai-assignment-2
+!uv sync
+from google.colab import drive
+drive.mount("/content/drive")
+# Colab secrets (key icon): add HF_TOKEN and a GitHub token, enable notebook access
+```
+
+Push after every job so the work survives a disconnect:
+
+```bash
+git add results report/figures splits && git commit -m "results: job <n>" && git push
+```
+
+### Job 1 - LoRA fine-tuning (about 20-40 min on T4)
+
+```bash
+uv run python -m trialmatch.train --output-dir /content/drive/MyDrive/trialmatch/adapter
+# after a disconnect, resume the same command with:
+uv run python -m trialmatch.train --output-dir /content/drive/MyDrive/trialmatch/adapter --resume
+```
+
+Outputs: `results/train_log.json`, `report/figures/train_curves.pdf`, adapter in the Drive folder
+(`adapter_model.safetensors`, `adapter_config.json`, tokenizer files).
+
+### Job 2 - optional hyper-parameter sweep (about 1.5-2.5 h)
+
+```bash
+uv run python -m trialmatch.train --sweep
+```
+
+Four configurations (LoRA rank x learning rate) selected by **validation macro-F1 only**.
+Output: `results/sweep.json`; the best adapter stays in `checkpoints/sweep/`.
+
+### Job 3 - validation evaluation, base vs fine-tuned (about 10-20 min each)
+
+```bash
+uv run python -m trialmatch.evaluate --split val --model base
+uv run python -m trialmatch.evaluate --split val --model finetuned \
+    --adapter /content/drive/MyDrive/trialmatch/adapter
+```
+
+Outputs: `results/val_base_hf.json`, `results/val_finetuned_hf.json`, the matching
+`*_predictions.jsonl`, and confusion matrices in `report/figures/`.
+
+### Local wiring checks (agent-side, never committed as results)
+
+```bash
+uv run python -m trialmatch.train --smoke                       # 2 steps, 8 examples, 0.5B, CPU
+uv run python -m trialmatch.evaluate --split val --model base --smoke   # 4 records, 0.5B
+```
 
 ## Results
 

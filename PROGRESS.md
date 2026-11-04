@@ -1,17 +1,18 @@
 # PROGRESS
 
-Last updated: 2026-11-04T21:05 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-04T23:40 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
-Phase 3: write `src/trialmatch/modeling.py` (ModelLoader) and `src/trialmatch/schema.py`
-(OutputParser), then `train.py`/`evaluate.py`; end at STOP POINT 1.
+**STOP POINT 1 reached.** Waiting for the user to run Colab jobs 1-3 (train + validation
+evaluation, commands in README "Long-running jobs"). After the user says training is running,
+continue with Phase 4 (`src/trialmatch/decoding.py`).
 
 ## Phase status
 | Phase | Status | Commit/tag | Notes |
 |-------|--------|------------|-------|
 | 1 Setup | done | 2223d03 / `phase-1-done` | uv project, deps, ruff/mypy/pytest config, constants skeleton, docs |
-| 2 Data | done | (pending commit) / `phase-2-done` | loader, splits, prompts, truncation report |
-| 3 Fine-tuning + evaluation | todo | — | ends at STOP POINT 1 |
+| 2 Data | done | ebf0ba1 / `phase-2-done` | loader, splits, prompts, truncation report |
+| 3 Fine-tuning + evaluation | awaiting-user | (commit pending) / `phase-3-done` | code + smoke green; Colab jobs 1-3 handed to user (STOP POINT 1) |
 | 4 KV-cached decoding | todo | — | |
 | 5 Attention | todo | — | |
 | 6 Speculative decoding | todo | — | |
@@ -39,17 +40,18 @@ Phase 3: write `src/trialmatch/modeling.py` (ModelLoader) and `src/trialmatch/sc
 - [ ] Self-review, commit, tag `phase-2-done`.
 
 ### Phase 3
-- [ ] `ModelLoader` (base/adapter/merged, device+dtype).
-- [ ] `FineTuner` (Trainer + peft LoRA, completion-only loss, `--resume`, `--output-dir`, `--smoke`).
-- [ ] `results/train_log.json` + `report/figures/train_curves.pdf`.
-- [ ] Optional `--sweep` (<=4 configs, validation macro-F1).
-- [ ] `OutputParser` (strict + tolerant fallback, invalid counts as wrong label).
-- [ ] `Evaluator` (classification overall/inclusion/exclusion, evidence micro/macro, empty-set rule).
-- [ ] Base vs fine-tuned on val; test only via `--split test --final`.
-- [ ] Error-analysis helper -> `results/error_cases.md` (>=12 cases).
-- [ ] `OverallAggregator` documented rule.
-- [ ] Colab jobs 1-3 in README + Awaiting user.
-- [ ] Self-review, commit, tag `phase-3-done` -> **STOP POINT 1**.
+- [x] `ModelLoader` (base/adapter/merged, device+dtype) — `modeling.py`, smoke-tested.
+- [x] `FineTuner` (Trainer + peft LoRA, completion-only loss, `--resume`, `--output-dir`, `--smoke`) — `train.py --smoke` ran 2 steps on CPU (loss 0.608, adapter saved).
+- [x] `results/train_log.json` + `report/figures/train_curves.pdf` — written by real runs; smoke writes into `checkpoints/smoke/`.
+- [x] Optional `--sweep` (<=4 configs, validation macro-F1) — `Sweeper`, user-run only.
+- [x] `OutputParser` (strict + tolerant fallback, invalid counts as wrong label) — `tests/test_schema.py` (9 tests).
+- [x] `Evaluator` (classification overall/inclusion/exclusion, evidence micro/macro, empty-set rule) — `tests/test_evaluate.py`; `--smoke` run produced 4/4 strict JSON.
+- [ ] Base vs fine-tuned on val (Colab job 3) — **awaiting user**.
+- [ ] Test evaluated once via `--split test --final` (Colab job 4) — **awaiting user**.
+- [x] Error-analysis helper -> `results/error_cases.md` (>=12 cases) — `ErrorAnalyzer`, `--errors`, user-run on test.
+- [x] `OverallAggregator` documented rule — `pipeline.py`, `tests/test_pipeline.py`.
+- [x] Colab jobs 1-3 in README + Awaiting user.
+- [x] Self-review, commit, tag `phase-3-done` -> **STOP POINT 1**.
 
 ### Phase 4
 - [ ] `Decoder` ABC + `GenerationResult`.
@@ -93,7 +95,12 @@ Phase 3: write `src/trialmatch/modeling.py` (ModelLoader) and `src/trialmatch/sc
 - [ ] Final gate green, clean tree, no weights committed.
 
 ## Awaiting user (jobs only the user can run / things needed)
-- [ ] Run Colab jobs 1-6 (listed in README "Long-running jobs (run on Colab T4)") — available after Phase 3/4/5/6/7 code lands.
+**STOP POINT 1 - start these now, they do not block Phases 4-7:**
+- [ ] Colab job 1 - train: `uv run python -m trialmatch.train --output-dir /content/drive/MyDrive/trialmatch/adapter` (about 20-40 min; `--resume` after a disconnect).
+- [ ] Colab job 2 (optional) - sweep: `uv run python -m trialmatch.train --sweep`.
+- [ ] Colab job 3 - validation eval: `--split val --model base` and `--split val --model finetuned --adapter /content/drive/MyDrive/trialmatch/adapter`.
+- [ ] Push `results/` + `report/figures/` after each job (commands in README).
+- [ ] Later (after Phase 7): jobs 4-6 (test eval with `--final`, benchmarks, adapter upload to HF).
 - [ ] Compile `report/` on Overleaf; record 5-7 min video; take app screenshots.
 - Results received from user: none yet.
 
@@ -118,6 +125,8 @@ Phase 3: write `src/trialmatch/modeling.py` (ModelLoader) and `src/trialmatch/sc
 - Split (seed 42, patient-level 37/8/8): **train 603 rows / val 206 / test 206**.
 - Token stats (Qwen tokenizer, prompt+target): max 595, mean ~300, p95 474; **0 examples exceed
   MAX_SEQ_LEN=2048** -> `results/truncation_report.json`, no gold evidence truncated.
+- Measured locally: `train --smoke` (0.5B, 2 steps, CPU) = 1 min 45 s wall; `evaluate --smoke`
+  (0.5B, 4 val records, MPS) = 0.69 s/record, 100% strict JSON with the final prompt.
 - Only 10 `excluded` and 23 `not included` examples exist, so those classes are rare; macro-F1
   over 4 classes per criterion type will be noisy on val/test (206 rows each).
 
@@ -125,6 +134,11 @@ Phase 3: write `src/trialmatch/modeling.py` (ModelLoader) and `src/trialmatch/sc
 - None yet.
 
 ## Session log (append-only, newest last)
+- 2026-11-04T23:40 opencode: Phase 2-3 done. Phase 2: dataset inspected (facts above),
+  `data.py` + `tests/test_data.py`, split manifest, truncation report. Phase 3: `schema.py`,
+  `modeling.py`, `train.py`, `evaluate.py`, `pipeline.py` (aggregator) + tests. Smoke runs green:
+  train 2 steps CPU (1:45 wall), eval 4 records 0.5B (strict JSON 4/4). Prompt reworded after the
+  first template made the base model emit a bare `[]` (D7). STOPPED at STOP POINT 1.
 - 2026-11-04T20:15 opencode: Phase 1 started. Created uv project (root moved from
   `trialmatch/` subdir to repo root), added runtime+dev deps, wrote `pyproject.toml`
   tooling config, `.gitignore`, `constants.py` skeleton. Next: README, DECISIONS, first commit.

@@ -315,6 +315,23 @@ class SplitManager:
         if total != expected:
             raise ValueError(f"split covers {total} patients, expected {expected}")
 
+    @staticmethod
+    def assert_split_allowed(split: str, final: bool) -> None:
+        """Refuse to touch the test split without ``--final``.
+
+        Args:
+            split: Requested split name.
+            final: Whether the caller passed ``--final``.
+
+        Raises:
+            ValueError: If ``split`` is unknown.
+            PermissionError: If the test split is requested without ``--final``.
+        """
+        if split not in c.SPLIT_NAMES:
+            raise ValueError(f"unknown split {split!r}; choose from {c.SPLIT_NAMES}")
+        if split == c.RESERVED_SPLIT and not final:
+            raise PermissionError(f"split {split!r} may only be evaluated once, with --final")
+
     def assign(
         self, annotations: Sequence[Annotation], manifest: SplitManifest
     ) -> dict[str, list[Annotation]]:

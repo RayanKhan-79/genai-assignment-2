@@ -175,3 +175,13 @@ def test_csv_friendly_json_target() -> None:
     """The target is valid JSON with sorted, de-duplicated-by-construction evidence IDs."""
     target = PromptBuilder.target("not included", [5, 3])
     assert json.loads(target) == {"label": "not included", "evidence_ids": [3, 5]}
+
+
+def test_split_guard_requires_final_for_test() -> None:
+    """The test split is reachable only through --final."""
+    SplitManager.assert_split_allowed("val", final=False)
+    SplitManager.assert_split_allowed("test", final=True)
+    with pytest.raises(PermissionError):
+        SplitManager.assert_split_allowed("test", final=False)
+    with pytest.raises(ValueError):
+        SplitManager.assert_split_allowed("dev", final=False)
