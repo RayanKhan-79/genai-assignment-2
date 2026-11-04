@@ -83,6 +83,8 @@ DRAFT_MODEL_NAME: Final[str] = "Qwen/Qwen2.5-0.5B-Instruct"
 SMOKE_MODEL_NAME: Final[str] = "Qwen/Qwen2.5-0.5B-Instruct"
 #: Hugging Face Hub repository that hosts the fine-tuned LoRA adapter.
 ADAPTER_REPO: Final[str] = "RayanKhan-79/genai-assignment-2"
+#: Decoding modes accepted by the evaluator and the app.
+DECODE_MODES: Final[tuple[str, ...]] = ("hf", "uncached", "cached")
 MODEL_TAG_BASE: Final[str] = "base"
 MODEL_TAG_FINETUNED: Final[str] = "finetuned"
 

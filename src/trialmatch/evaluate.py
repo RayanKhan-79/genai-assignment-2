@@ -28,6 +28,7 @@ from trialmatch.data import (
     SentenceSplitter,
     SplitManager,
 )
+from trialmatch.decoding import DecoderFactory
 from trialmatch.modeling import LoadedModel, ModelLoader
 from trialmatch.schema import OutputParser, Prediction
 
@@ -73,19 +74,37 @@ class EvalRecord:
         )
 
 
-class GreedyRunner:
-    """Greedy generation through ``model.generate`` (the reference decoder of Phase 3)."""
+class GenerationRunner:
+    """Greedy generation through ``model.generate`` or one of the hand-written decoders."""
 
     def __init__(
-        self, loaded: LoadedModel, max_new_tokens: int = c.GENERATION.max_new_tokens
+        self,
+        loaded: LoadedModel,
+        max_new_tokens: int = c.GENERATION.max_new_tokens,
+        decode: str = "hf",
     ) -> None:
-        """Store the model bundle and generation budget."""
+        """Store the model bundle, the generation budget and the decoding mode."""
         self._loaded = loaded
         self._encoder = PromptEncoder(loaded.tokenizer)
         self._max_new_tokens = max_new_tokens
+        self._decode = decode
+        eos = loaded.tokenizer.eos_token_id
+        self._decoder = (
+            None
+            if decode == "hf"
+            else DecoderFactory.create(
+                decode, loaded.model, [eos] if eos is not None else [], loaded.device
+            )
+        )
 
     def run(self, example: Example) -> tuple[str, float]:
         """Generate one completion and return ``(decoded_text, latency_seconds)``."""
+        if self._decoder is not None:
+            result = self._decoder.generate(self._encoder.prompt_ids(example), self._max_new_tokens)
+            text = cast(
+                str, self._loaded.tokenizer.decode(list(result.tokens), skip_special_tokens=True)
+            )
+            return text, result.latency_s
         tokenizer = self._loaded.tokenizer
         inputs = tokenizer(self._encoder.prompt_text(example), return_tensors="pt").to(
             self._loaded.device
@@ -328,15 +347,19 @@ class Evaluator:
         limit: int | None = None,
         decode: str = "hf",
         model_name: str = c.BASE_MODEL_NAME,
+        file_tag: str | None = None,
     ) -> None:
         """Configure the run; the test split requires ``final=True``."""
         SplitManager.assert_split_allowed(split, final)
+        if decode not in c.DECODE_MODES:
+            raise ValueError(f"unknown decode mode {decode!r}; choose from {c.DECODE_MODES}")
         self._split = split
         self._model_tag = model_tag
         self._adapter = adapter
         self._max_new_tokens = max_new_tokens
         self._limit = limit
         self._decode = decode
+        self._file_tag = file_tag or decode
         self._model_name = model_name
 
     def run(self) -> dict[str, Any]:
@@ -348,7 +371,7 @@ class Evaluator:
         if self._limit is not None:
             items = items[: self._limit]
         loaded = ModelLoader(self._model_name, adapter=self._adapter).load()
-        runner = GreedyRunner(loaded, self._max_new_tokens)
+        runner = GenerationRunner(loaded, self._max_new_tokens, self._decode)
         builder = PromptBuilder()
         parser = OutputParser()
         splitter = SentenceSplitter()
@@ -361,7 +384,7 @@ class Evaluator:
             records.append(self._record(annotation, prediction, raw, latency))
         metrics = self._metrics(records, loaded)
         c.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-        stem = f"{self._split}_{self._model_tag}_{self._decode}"
+        stem = f"{self._split}_{self._model_tag}_{self._file_tag}"
         stem_path = c.RESULTS_DIR / f"{stem}_predictions.jsonl"
         self._write_predictions(records, stem_path)
         self._write_figures(metrics["classification"], stem)
@@ -458,6 +481,12 @@ def main() -> None:
     parser.add_argument(
         "--smoke", action="store_true", help="0.5B model, 4 records (local wiring check)"
     )
+    parser.add_argument(
+        "--decode",
+        choices=list(c.DECODE_MODES),
+        default="hf",
+        help="hf = model.generate baseline; cached/uncached = hand-written loops",
+    )
     args = parser.parse_args()
 
     adapter = args.adapter
@@ -471,12 +500,13 @@ def main() -> None:
         max_new_tokens=args.max_new_tokens,
         limit=4 if args.smoke else args.limit,
         model_name=c.SMOKE_MODEL_NAME if args.smoke else c.BASE_MODEL_NAME,
-        decode="smoke" if args.smoke else "hf",
+        decode=args.decode,
+        file_tag=f"smoke-{args.decode}" if args.smoke else None,
     )
     metrics = evaluator.run()
     print(json.dumps(metrics["classification"]["overall"]["report"].get("macro avg", {}), indent=2))
     if args.errors:
-        tag = "smoke" if args.smoke else "hf"
+        tag = f"smoke-{args.decode}" if args.smoke else args.decode
         predictions = c.RESULTS_DIR / f"{args.split}_{args.model}_{tag}_predictions.jsonl"
         rows = [json.loads(line) for line in predictions.read_text(encoding="utf-8").splitlines()]
         written = ErrorAnalyzer().run(

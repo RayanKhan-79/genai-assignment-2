@@ -1,11 +1,10 @@
 # PROGRESS
 
-Last updated: 2026-11-04T23:40 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-05T00:20 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
-**STOP POINT 1 reached.** Waiting for the user to run Colab jobs 1-3 (train + validation
-evaluation, commands in README "Long-running jobs"). After the user says training is running,
-continue with Phase 4 (`src/trialmatch/decoding.py`).
+Phase 5: `src/trialmatch/attention.py` (ReferenceAttention, TiledAttention with online softmax),
+`tests/test_attention.py`, attention suite in `benchmark.py`.
 
 ## Phase status
 | Phase | Status | Commit/tag | Notes |
@@ -13,7 +12,7 @@ continue with Phase 4 (`src/trialmatch/decoding.py`).
 | 1 Setup | done | 2223d03 / `phase-1-done` | uv project, deps, ruff/mypy/pytest config, constants skeleton, docs |
 | 2 Data | done | ebf0ba1 / `phase-2-done` | loader, splits, prompts, truncation report |
 | 3 Fine-tuning + evaluation | awaiting-user | 9f3995a / `phase-3-done` | code + smoke green; Colab jobs 1-3 handed to user (STOP POINT 1) |
-| 4 KV-cached decoding | todo | — | |
+| 4 KV-cached decoding | done | (commit pending) / `phase-4-done` | Decoder ABC, Uncached/Cached loops, decoding benchmark |
 | 5 Attention | todo | — | |
 | 6 Speculative decoding | todo | — | |
 | 7 Application | todo | — | ends at STOP POINT 2 |
@@ -54,13 +53,13 @@ continue with Phase 4 (`src/trialmatch/decoding.py`).
 - [x] Self-review, commit, tag `phase-3-done` -> **STOP POINT 1**.
 
 ### Phase 4
-- [ ] `Decoder` ABC + `GenerationResult`.
-- [ ] `UncachedDecoder` reference path.
-- [ ] `CachedDecoder` explicit loop (no `model.generate`), documented masking/positions/cache math.
-- [ ] Timing with CUDA sync/peak memory, warm-ups + repeats.
-- [ ] `tests/test_decoding.py` greedy equality 3 prompt lengths x 2 output lengths.
-- [ ] `Benchmarker` decoding grid -> `results/bench_decoding.json` + figure.
-- [ ] Self-review, commit, tag `phase-4-done`.
+- [x] `Decoder` ABC + `GenerationResult` — `decoding.py`.
+- [x] `UncachedDecoder` reference path.
+- [x] `CachedDecoder` explicit loop (no `model.generate`), documented masking/positions/cache math.
+- [x] Timing with CUDA sync/peak memory, warm-ups + repeats — `Timing` class, `BenchmarkConfig`.
+- [x] `tests/test_decoding.py` greedy equality 3 prompt lengths x 2 output lengths — 10 tests, fp32 CPU.
+- [x] `Benchmarker` decoding grid -> `results/bench_decoding.json` + figure — smoke verified (tiny model, 1.2x speedup, tokens equal); real run = Colab job 5.
+- [x] Self-review, commit, tag `phase-4-done`.
 
 ### Phase 5
 - [ ] `ReferenceAttention`.

@@ -90,3 +90,15 @@ The target model in fp16 is ~3 GB and the T4 has 16 GB, so accelerate sharding b
 loading the whole checkpoint and calling `.to(device)` keeps the Trainer path simple and avoids
 `device_map` interactions (which are meant for multi-GPU / quantised loading). Documented deviation
 from the PLAN.md wording; behaviour on CPU/MPS is identical.
+
+## D13. Evaluation decoding mode (Phase 4) — 2026-11-05
+`evaluate` defaults to `--decode hf` (`model.generate`, greedy) so the job-3 commands already handed
+to the user stay reproducible. The hand-written decoders are selected explicitly with
+`--decode cached|uncached`, which writes `results/{split}_{model}_cached.json`; running that on
+validation is the equivalence check for the cache (same prompt, same greedy rule, same parser).
+Result filenames always carry the decoding mode, so no two runs can be confused.
+
+## D14. Smoke artefacts live outside `results/` (Phase 4) — 2026-11-05
+Benchmarks and evaluations run with `--smoke` write under `checkpoints/smoke/` and tag their files
+`smoke-<mode>`; `results/` only ever holds real Colab runs, so every number quoted in the report is
+traceable to a real job.
