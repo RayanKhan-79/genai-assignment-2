@@ -1,11 +1,11 @@
 # PROGRESS
 
-Last updated: 2026-11-05T01:25 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-05T02:10 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
-Phase 7: `pipeline.py` (`ScreeningPipeline`, `ReportExporter`), `app.py` (Gradio 6: disclaimer,
-screening tab, benchmark tab, download report, validation), README "Run the app", `--smoke` UI
-check.
+Phase 9 results-independent parts + Phase 8 docs: LaTeX skeleton (`report/main.tex`), `refs.bib`,
+`docs/ARCHITECTURE.md`, `docs/AI_USE.md`, complete the Colab job list (jobs 4 and 6) in README and
+here, push, then **STOP POINT 2**.
 
 ## Phase status
 | Phase | Status | Commit/tag | Notes |
@@ -15,8 +15,8 @@ check.
 | 3 Fine-tuning + evaluation | awaiting-user | 9f3995a / `phase-3-done` | code + smoke green; Colab jobs 1-3 handed to user (STOP POINT 1) |
 | 4 KV-cached decoding | done | f4cc341 / `phase-4-done` | Decoder ABC, Uncached/Cached loops, decoding benchmark |
 | 5 Attention | done | 82af14b / `phase-5-done` | reference + tiled online softmax, 11 tests, benchmark suite |
-| 6 Speculative decoding | done | (commit pending) / `phase-6-done` | draft/verify loop with cache re-sync, 13 tests, benchmark suite |
-| 7 Application | todo | — | ends at STOP POINT 2 |
+| 6 Speculative decoding | done | f7f6a12 / `phase-6-done` | draft/verify loop with cache re-sync, 13 tests, benchmark suite |
+| 7 Application | done | (commit pending) / `phase-7-done` | pipeline + report exporter + Gradio app, smoke green |
 | 8 Long-running jobs | todo | — | user runs on Colab |
 | 9 Report + docs + hygiene | todo | — | |
 
@@ -77,12 +77,12 @@ check.
 - [x] Self-review, commit, tag `phase-6-done`.
 
 ### Phase 7
-- [ ] `ScreeningPipeline.screen()`.
-- [ ] `ReportExporter` (Markdown/HTML, disclaimer, provenance).
-- [ ] Gradio app: disclaimer, screening tab, benchmark tab, error handling, lazy model load.
-- [ ] README "Run the app".
-- [ ] `--smoke` UI wiring test.
-- [ ] Self-review, commit, tag `phase-7-done` -> **STOP POINT 2**.
+- [x] `ScreeningPipeline.screen()` — `pipeline.py` (prompt per criterion, prompt-length guard, `assemble()` pure path).
+- [x] `ReportExporter` (Markdown/HTML, disclaimer, provenance) — `pipeline.py`, 6 new tests in `tests/test_pipeline.py`.
+- [x] Gradio app: disclaimer, screening tab, benchmark tab, error handling, lazy model load — `app.py` (`ScreeningApp`).
+- [x] README "Run the app" — commands, first-load times, adapter resolution, tabs, error behaviour.
+- [x] `--smoke` UI wiring test — `uv run python -m trialmatch.app --smoke` green (2 criteria, 1.20 s cached; 3 benchmark rows, 169-token prompt).
+- [x] Self-review, commit, tag `phase-7-done` -> **STOP POINT 2**.
 
 ### Phase 8
 - [ ] Six Colab jobs documented in README + Awaiting user.
@@ -132,11 +132,18 @@ check.
 - Speculative smoke (tiny 2-layer target, 1-layer draft, CPU): tokens equal to cached target,
   `assistant_model` prefix check matches, gamma=2 gives 1.0 acceptance (both random models emit
   the same constant token) — wiring check only, real numbers come from Colab job 5.
+- App smoke (0.5B base, CPU/MPS): 2 criteria with KV cache in 1.20 s; live benchmark ran three
+  decoders on a 169-token prompt with a 32-token budget; UI config has 37 components.
 
 ## Open problems / blockers
 - None yet.
 
 ## Session log (append-only, newest last)
+- 2026-11-05T02:10 opencode: Phase 7 done. `ScreeningPipeline` + `ReportExporter` (Markdown and
+  HTML, disclaimer, rule, provenance), `app.py` with lazy merged-adapter target, speculative draft,
+  screening tab, live three-decoder benchmark tab and stored-JSON viewer. App smoke green on the
+  0.5B base model (2 criteria in 1.20 s, benchmark 3 rows). 73 tests green. Next: Phase 9
+  results-independent parts, jobs 4/6 docs, STOP POINT 2.
 - 2026-11-05T01:25 opencode: Phase 6 done. `speculative.py` (gamma budget, one target forward per
   round, cache crop by rejected proposals, one extra draft step on full acceptance, tokenizer
   equality check), 13 tests. Benchmark suite wired: 8 val prompts, gammas 2/4/6, fixed 128-token

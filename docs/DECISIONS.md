@@ -130,3 +130,26 @@ definition rather than against itself. Unsupported SDPA backends are recorded as
   loop is not greedy.
 - **Statistics field.** `GenerationResult.stats` is optional and typed through a `TYPE_CHECKING`
   import so `decoding.py` does not import `speculative.py` at runtime (no cycle).
+
+## D17. Application and report choices (Phase 7) — 2026-11-05
+- **One merged target model for every decoder.** The app always loads with `merge_adapter=True`, so
+  `uncached`, `cached` and `speculative` all see identical weights; an unmerged PEFT model would
+  change the forward pass and break the decoder-comparison tab.
+- **Criteria input.** Two textboxes (one criterion per line) instead of a test-split example
+  dropdown: PLAN allows either, and this needs no dataset download at app start.
+- **Reports.** `ReportExporter.write` emits Markdown (offered by the Download button) and HTML (same
+  stem) under `checkpoints/reports/` — app artefacts never enter `results/`, so every committed
+  result still comes from a named Colab job.
+- **Benchmark tab.** It times all three decoders on the **first** criterion of the current input
+  with at most 32 new tokens (`APP_BENCHMARK_MAX_NEW_TOKENS`) and speculative gamma 4, which keeps
+  the UI responsive on CPU; the honest speedup/slowdown study is job 5 on the T4.
+- **Speculative in the app** loads the 0.5B draft lazily too and asserts tokenizer equality; on CPU
+  it is expected to be slower, and the tab reports that instead of hiding it.
+- **`--smoke` does not launch a server.** It builds the Blocks layout (validates component wiring),
+  runs both tabs once on the 0.5B base model and exits, because the agent environment has no browser
+  and a blocking server would violate the 10-minute rule.
+- **Typing.** Gradio 6 has no complete stubs, so `trialmatch.app` alone gets
+  `disallow_untyped_calls = false`; every other module stays under full `mypy --strict`.
+- **Runner reuse.** `GenerationRunner` gained an optional `draft` plus a `speculative` mode, so the
+  app, the pipeline and the evaluator share one decoder path; the evaluator's `--decode` choices
+  are unchanged.

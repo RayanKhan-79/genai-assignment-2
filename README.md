@@ -53,10 +53,36 @@ Writes `splits/split_manifest.json` (37/8/8 patients, seed 42) and
 ## Run the app
 
 ```bash
-uv run python -m trialmatch.app            # http://127.0.0.1:7860
+uv sync
+uv run python -m trialmatch.app                                  # http://127.0.0.1:7860
+uv run python -m trialmatch.app --device cpu                     # force CPU (CUDA -> MPS -> CPU)
+uv run python -m trialmatch.app --adapter checkpoints/adapter    # explicit local adapter
 ```
 
-TODO(phase-7): first-load time, CPU/GPU notes, local-adapter instructions.
+- **First load is the slow part.** The fine-tuned 1.5B target (about 6 GB in fp32 on CPU) is loaded
+  lazily on the first screening request: roughly 1-2 min on a CUDA T4 and 2-4 min on CPU; later
+  requests reuse it. Nothing is downloaded until then.
+- **Adapter resolution.** The app uses `--adapter`, else `checkpoints/adapter`, else downloads
+  `RayanKhan-79/genai-assignment-2` into `checkpoints/adapter`. If none is reachable it runs the
+  base model and says so in the status line.
+- **Screening tab.** Paste a note (numbered lines are kept as-is; free text is split into
+  sentences) or upload a `.txt`; add one inclusion and one exclusion criterion per line; choose
+  `Uncached`, `KV cache` or `Speculative`; press Run. The table shows label, evidence IDs, quoted
+  evidence and the deterministic template explanation, followed by the preliminary outcome and the
+  missing-information list. **Download Markdown report** saves the report; an HTML copy is written
+  next to it under `checkpoints/reports/`, with the disclaimer, aggregation rule and provenance
+  block.
+- **Benchmark tab.** Runs all three decoders on the first criterion of the current input and shows
+  latency, tokens/s, forward calls, peak memory, acceptance rate (speculative) and whether the
+  tokens match the uncached baseline, plus latency/throughput charts. The accordion below renders
+  the stored `results/bench_*.json` files from Colab job 5.
+- **Speculative mode** additionally loads `Qwen/Qwen2.5-0.5B-Instruct` as the draft (about 1 GB
+  fp32) and asserts that both tokenizers are identical. On CPU it is expected to be slower than the
+  KV cache; the benchmark tab reports the real number.
+- **Errors** (empty note, no criteria, prompt over 2048 tokens, unparseable output, model not
+  loadable) become a readable status message; the app stays usable and never shows a stack trace.
+- `uv run python -m trialmatch.app --smoke` builds the whole UI and exercises both tabs on the
+  0.5B base model without opening a server — the agent-side wiring check.
 
 ## Long-running jobs (run on Colab T4)
 
@@ -141,6 +167,7 @@ uv run python -m trialmatch.evaluate --split val --model finetuned \
 ```bash
 uv run python -m trialmatch.train --smoke                       # 2 steps, 8 examples, 0.5B, CPU
 uv run python -m trialmatch.evaluate --split val --model base --smoke   # 4 records, 0.5B
+uv run python -m trialmatch.app --smoke                         # both UI tabs, 0.5B, no server
 ```
 
 ## Results

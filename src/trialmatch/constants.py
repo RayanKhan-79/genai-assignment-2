@@ -7,8 +7,10 @@ into classes as configuration objects.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Final
 
 # --------------------------------------------------------------------------------------
@@ -202,3 +204,38 @@ BENCHMARK: Final[BenchmarkConfig] = BenchmarkConfig()
 APP_TITLE: Final[str] = "TrialMatch: Educational Trial Screening Prototype"
 APP_DISCLAIMER: Final[str] = "Educational screening prototype, not a clinical enrollment decision."
 APP_MAX_CRITERIA: Final[int] = 40
+#: Decoders the app can run (the evaluator's ``DECODE_MODES`` plus speculative).
+APP_DECODE_MODES: Final[tuple[str, ...]] = ("uncached", "cached", "speculative")
+#: Decoders offered in the app dropdown (display label -> :data:`DECODE_MODES` value).
+APP_DECODE_LABELS: Final[Mapping[str, str]] = MappingProxyType(
+    {"Uncached": "uncached", "KV cache": "cached", "Speculative": "speculative"}
+)
+#: Draft budget used by the app's speculative decoder (the benchmark explores the full grid).
+APP_SPECULATIVE_GAMMA: Final[int] = 4
+#: Short generation budget for the app's live benchmark tab (keeps the UI responsive on CPU).
+APP_BENCHMARK_MAX_NEW_TOKENS: Final[int] = 32
+#: Generated reports are app artefacts, so they live outside ``results/`` (git-ignored).
+APP_REPORT_DIR: Final[Path] = CHECKPOINTS_DIR / "reports"
+APP_AGGREGATION_RULE: Final[str] = (
+    "'not applicable' criteria are ignored; any inclusion 'not included' or exclusion 'excluded' "
+    "gives 'Likely ineligible'; any 'not enough information' or unparseable label gives "
+    "'Needs more information'; only when every inclusion is 'included' and every exclusion is "
+    "'not excluded' is the result 'Likely eligible'; an empty applicable set also gives "
+    "'Needs more information'."
+)
+#: Template explanations shown in the app and the exported report, keyed by predicted label.
+APP_EXPLANATIONS: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "included": "The note explicitly satisfies this inclusion criterion; the cited "
+        "sentences are the evidence.",
+        "not included": "The note does not show that this inclusion criterion is satisfied.",
+        "excluded": "The note satisfies this exclusion criterion; the cited sentences are the "
+        "evidence.",
+        "not excluded": "The note does not show that this exclusion criterion applies.",
+        "not enough information": "The note does not contain enough information to decide "
+        "this criterion.",
+        "not applicable": "This criterion does not apply to the patient.",
+        "invalid": "The model output could not be parsed into a legal label; review the raw "
+        "output.",
+    }
+)

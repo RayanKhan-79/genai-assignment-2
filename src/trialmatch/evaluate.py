@@ -28,9 +28,10 @@ from trialmatch.data import (
     SentenceSplitter,
     SplitManager,
 )
-from trialmatch.decoding import DecoderFactory
+from trialmatch.decoding import Decoder, DecoderFactory
 from trialmatch.modeling import LoadedModel, ModelLoader
 from trialmatch.schema import OutputParser, Prediction
+from trialmatch.speculative import SpeculativeDecoder
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,7 @@ class GenerationRunner:
         loaded: LoadedModel,
         max_new_tokens: int = c.GENERATION.max_new_tokens,
         decode: str = "hf",
+        draft: LoadedModel | None = None,
     ) -> None:
         """Store the model bundle, the generation budget and the decoding mode."""
         self._loaded = loaded
@@ -89,13 +91,22 @@ class GenerationRunner:
         self._max_new_tokens = max_new_tokens
         self._decode = decode
         eos = loaded.tokenizer.eos_token_id
-        self._decoder = (
-            None
-            if decode == "hf"
-            else DecoderFactory.create(
-                decode, loaded.model, [eos] if eos is not None else [], loaded.device
+        eos_ids = [eos] if eos is not None else []
+        if decode == "speculative":
+            if draft is None:
+                raise ValueError("speculative decoding requires a draft model")
+            self._decoder: Decoder | None = SpeculativeDecoder(
+                loaded.model,
+                draft.model,
+                eos_ids,
+                loaded.device,
+                gamma=c.APP_SPECULATIVE_GAMMA,
+                tokenizers=(loaded.tokenizer, draft.tokenizer),
             )
-        )
+        elif decode == "hf":
+            self._decoder = None
+        else:
+            self._decoder = DecoderFactory.create(decode, loaded.model, eos_ids, loaded.device)
 
     def run(self, example: Example) -> tuple[str, float]:
         """Generate one completion and return ``(decoded_text, latency_seconds)``."""

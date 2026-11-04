@@ -71,6 +71,11 @@ warn_unreachable = true
 module = ["matplotlib.*", "datasets.*", "gradio.*", "sklearn.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# Gradio 6 ships no complete stubs: its constructors and event wiring are untyped at the call site.
+module = ["trialmatch.app"]
+disallow_untyped_calls = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
