@@ -1,6 +1,6 @@
 # PROGRESS
 
-Last updated: 2026-11-05T02:55 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-05T03:20 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
 **STOP POINT 2 reached.** All code and all results-independent documentation is done. The user runs
@@ -18,8 +18,8 @@ R1-R10 audit.
 | 5 Attention | done | 82af14b / `phase-5-done` | reference + tiled online softmax, 11 tests, benchmark suite |
 | 6 Speculative decoding | done | f7f6a12 / `phase-6-done` | draft/verify loop with cache re-sync, 13 tests, benchmark suite |
 | 7 Application | done | 8365cf6 / `phase-7-done` | pipeline + report exporter + Gradio app, smoke green |
-| 8 Long-running jobs | done (docs) | — commit pending | jobs 1-6 in README + Awaiting user; user runs them |
-| 9 Report + docs + hygiene | in progress | — | LaTeX skeleton, refs.bib, ARCHITECTURE, AI_USE, README done; numbers await jobs 3-6 |
+| 8 Long-running jobs | done (docs) | ba558b7 | jobs 1-6 in README + Awaiting user; user runs them |
+| 9 Report + docs + hygiene | in progress | 66a850b | skeleton, refs, ARCHITECTURE, AI_USE, README, evidence-tied explanations done; numbers await jobs 3-6 |
 
 ## Checklist state
 ### Phase 1
@@ -97,14 +97,17 @@ R1-R10 audit.
 - [ ] Fill report numbers from `results/*.json`, interpret every figure/table, finish error analysis (after jobs 3-6).
 
 ## Awaiting user (jobs only the user can run / things needed)
-**STOP POINT 1 - start these now, they do not block Phases 4-7:**
-- [ ] Colab job 1 - train: `uv run python -m trialmatch.train --output-dir /content/drive/MyDrive/trialmatch/adapter` (about 20-40 min; `--resume` after a disconnect).
-- [ ] Colab job 2 (optional) - sweep: `uv run python -m trialmatch.train --sweep`.
-- [ ] Colab job 3 - validation eval: `--split val --model base` and `--split val --model finetuned --adapter /content/drive/MyDrive/trialmatch/adapter`.
-- [ ] Push `results/` + `report/figures/` after each job (commands in README).
-- [ ] Later (after Phase 7): jobs 4-6 (test eval with `--final`, benchmarks, adapter upload to HF).
-- [ ] Compile `report/` on Overleaf; record 5-7 min video; take app screenshots.
-- Results received from user: none yet.
+**STOP POINT 2 - remaining work, in order (exact commands in README "Long-running jobs"):**
+- [ ] Job 1 (if not finished) - train: `uv run python -m trialmatch.train --output-dir /content/drive/MyDrive/trialmatch/adapter` (20-40 min; `--resume` after a disconnect).
+- [ ] Job 2 (optional) - sweep: `uv run python -m trialmatch.train --sweep`.
+- [ ] Job 3 - validation eval: `uv run python -m trialmatch.evaluate --split val --model base`, the same with `--model finetuned --adapter /content/drive/MyDrive/trialmatch/adapter`, plus `--decode cached` for the equivalence check.
+- [ ] Job 4 - test eval exactly once: `--split test --final` for base and `--model finetuned --adapter ... --final --errors`.
+- [ ] Job 5 - benchmarks: `--suite decoding`, `--suite attention`, `--suite speculative --model finetuned --adapter ...`.
+- [ ] Job 6 - upload adapter: `uv run hf upload RayanKhan-79/genai-assignment-2 /content/drive/MyDrive/trialmatch/adapter`.
+- [ ] Push `results/` + `report/figures/` after each job (`git add results report/figures && git commit && git push`).
+- [ ] Compile `report/main.tex` on Overleaf; replace every red `TODO(user)` placeholder; add screenshots (`report/figures/app_*.png`) and the 5-7 min video link.
+- [ ] Finalize `docs/AI_USE.md` with anything the human wants to add.
+- Results received from user: **none yet** (every result table is still a placeholder).
 
 ## Facts discovered
 - Environment: macOS 26.6.2 arm64, uv 0.12.5, Python 3.11 (uv-managed).
@@ -136,7 +139,9 @@ R1-R10 audit.
   the same constant token) — wiring check only, real numbers come from Colab job 5.
 - App smoke (0.5B base, CPU/MPS): 2 criteria with KV cache in 1.20 s; live benchmark ran three
   decoders on a 169-token prompt with a 32-token budget; UI config has 37 components.
-- Test suite at STOP POINT 2: 73 tests, mypy --strict clean over 21 source files, ruff clean.
+- Test suite at STOP POINT 2: 74 tests, mypy --strict clean over 21 source files, ruff clean.
+- Explanations are deterministic: `APP_EXPLANATIONS[label]` + quoted cited sentences, or
+  `APP_NO_EVIDENCE` (the wording PLAN section 1 requires) when nothing is cited.
 - arXiv/publisher checks done this session for every entry in `report/refs.bib` (TrialGPT DOI
   10.1038/s41467-024-53081-z; Qwen2.5 2412.15115; LoRA 2106.09685; FlashAttention 2205.14135;
   online softmax 1805.02867; Leviathan 2211.17192; Chen 2302.01318; Vaswani 1706.03762).
@@ -145,6 +150,21 @@ R1-R10 audit.
 - None yet.
 
 ## Session log (append-only, newest last)
+- 2026-11-05T03:20 opencode: STOP POINT 2 self-review (PLAN A.2.1). (1) Quality gate green: ruff
+  format/check clean, `mypy --strict` clean over 21 files, **74 tests pass** (`uv run pytest`). (2)
+  R1-R10 re-checked on the touched files: only `uv run` commands in README/scripts; every new
+  function annotated (`pipeline.py`, `app.py`, `speculative.py`); no `global` and no mutable module
+  state (`APP_EXPLANATIONS`/`APP_DECODE_LABELS` are `MappingProxyType`); every new constant
+  (`APP_*`, `APP_NO_EVIDENCE`, `speculative_prompts`, `APP_BENCHMARK_MAX_NEW_TOKENS`) is in
+  `constants.py`; no premature optimisation (plain PyTorch loops, justified tiling); no paper claim
+  without a file in `results/` (all result cells are `\pending{}`); one ruff style; classes are
+  thin frozen dataclasses; test split still guarded by `--final`; no `gpt4_*` field is read; no
+  secret in the tree; `checkpoints/` and weights are ignored. (3) Every checked item has evidence in
+  the file/test name listed in the checklists above. (4) No file outside the PLAN layout except the
+  ignored `checkpoints/` smoke/report artefacts. (5) No unbacked number: every figure/table in
+  `report/main.tex` is a red placeholder until the matching Colab job lands.
+  Also committed the evidence-tied explanation change (`66a850b`) and updated this section for
+  STOP POINT 2.
 - 2026-11-05T02:55 opencode: Phase 8 docs + Phase 9 results-independent parts done. README now has
   jobs 1-6, the results table and a complete app section; added `docs/ARCHITECTURE.md`,
   `docs/AI_USE.md`, `report/main.tex` (IEEEtran skeleton, algorithms, all sections, conditional
