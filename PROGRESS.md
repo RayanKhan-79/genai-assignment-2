@@ -12,7 +12,7 @@ continue with Phase 4 (`src/trialmatch/decoding.py`).
 |-------|--------|------------|-------|
 | 1 Setup | done | 2223d03 / `phase-1-done` | uv project, deps, ruff/mypy/pytest config, constants skeleton, docs |
 | 2 Data | done | ebf0ba1 / `phase-2-done` | loader, splits, prompts, truncation report |
-| 3 Fine-tuning + evaluation | awaiting-user | (commit pending) / `phase-3-done` | code + smoke green; Colab jobs 1-3 handed to user (STOP POINT 1) |
+| 3 Fine-tuning + evaluation | awaiting-user | 9f3995a / `phase-3-done` | code + smoke green; Colab jobs 1-3 handed to user (STOP POINT 1) |
 | 4 KV-cached decoding | todo | — | |
 | 5 Attention | todo | — | |
 | 6 Speculative decoding | todo | — | |
