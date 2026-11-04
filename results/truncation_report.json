@@ -1,0 +1,28 @@
+{
+  "max_seq_len": 2048,
+  "splits": {
+    "train": {
+      "n_examples": 603,
+      "max_tokens": 595,
+      "mean_tokens": 300.4,
+      "p95_tokens": 474,
+      "n_over_max_seq_len": 0
+    },
+    "val": {
+      "n_examples": 206,
+      "max_tokens": 430,
+      "mean_tokens": 314.1,
+      "p95_tokens": 366,
+      "n_over_max_seq_len": 0
+    },
+    "test": {
+      "n_examples": 206,
+      "max_tokens": 489,
+      "mean_tokens": 283.1,
+      "p95_tokens": 353,
+      "n_over_max_seq_len": 0
+    }
+  },
+  "n_over_max_seq_len_total": 0,
+  "gold_evidence_truncated": false
+}

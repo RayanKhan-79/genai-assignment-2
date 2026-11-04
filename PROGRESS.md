@@ -1,16 +1,16 @@
 # PROGRESS
 
-Last updated: 2026-11-04T20:15 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-04T21:05 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
-Phase 1: finish project setup (README skeleton, docs/DECISIONS.md, first commit + tag
-`phase-1-done`, add GitHub remote), then Phase 2 `src/trialmatch/data.py`.
+Phase 3: write `src/trialmatch/modeling.py` (ModelLoader) and `src/trialmatch/schema.py`
+(OutputParser), then `train.py`/`evaluate.py`; end at STOP POINT 1.
 
 ## Phase status
 | Phase | Status | Commit/tag | Notes |
 |-------|--------|------------|-------|
-| 1 Setup | in-progress | — | uv project, deps, ruff/mypy/pytest config, constants skeleton |
-| 2 Data | todo | — | |
+| 1 Setup | done | 2223d03 / `phase-1-done` | uv project, deps, ruff/mypy/pytest config, constants skeleton, docs |
+| 2 Data | done | (pending commit) / `phase-2-done` | loader, splits, prompts, truncation report |
 | 3 Fine-tuning + evaluation | todo | — | ends at STOP POINT 1 |
 | 4 KV-cached decoding | todo | — | |
 | 5 Attention | todo | — | |
@@ -30,12 +30,12 @@ Phase 1: finish project setup (README skeleton, docs/DECISIONS.md, first commit 
 - [ ] First commit + tag `phase-1-done`; add GitHub remote.
 
 ### Phase 2
-- [ ] `AnnotationLoader.load()` drops every `gpt4_*` / `explanation_correctness` field.
-- [ ] `SplitManager` 37/8/8 by patient, `splits/split_manifest.json`, `assert_no_leakage()`.
-- [ ] `SentenceSplitter` (dataset numbering + regex fallback for app notes).
-- [ ] `PromptBuilder` (system + numbered sentences + criterion + schema; compact JSON target).
-- [ ] Truncation analysis -> `results/truncation_report.json`.
-- [ ] `uv run python -m trialmatch.data --summary` runs.
+- [x] `AnnotationLoader.load()` drops every `gpt4_*` / `explanation_correctness` field.
+- [x] `SplitManager` 37/8/8 by patient, `splits/split_manifest.json`, `assert_no_leakage()`.
+- [x] `SentenceSplitter` (dataset numbering + regex fallback for app notes).
+- [x] `PromptBuilder` (system + numbered sentences + criterion + schema; compact JSON target).
+- [x] Truncation analysis -> `results/truncation_report.json`.
+- [x] `uv run python -m trialmatch.data --summary` runs.
 - [ ] Self-review, commit, tag `phase-2-done`.
 
 ### Phase 3
@@ -105,6 +105,21 @@ Phase 1: finish project setup (README skeleton, docs/DECISIONS.md, first commit 
 - `transformers` 5.x and `gradio` 6.x are newer than the versions assumed by PLAN.md: every API
   call must be verified against the installed source before use.
 - MPS is available locally; CPU/MPS only, no CUDA. No local GPU.
+- **Dataset** `ncbi/TrialGPT-Criterion-Annotations`: single split `train`, **1,015 rows**,
+  **53 patients**, 103 trials. Columns: `annotation_id, patient_id, note, trial_id, trial_title,
+  criterion_type, criterion_text, gpt4_explanation, explanation_correctness, gpt4_sentences,
+  expert_sentences, gpt4_eligibility, expert_eligibility, training`. There is **no**
+  `criterion_number` column (PLAN expected one) and no per-patient split column.
+- `expert_sentences` / `gpt4_sentences` are JSON **strings** (`"[0, 1, 2]"`), not lists.
+- `criterion_type` is lowercase `inclusion`/`exclusion`; labels are the expected 4 + 4.
+  Distribution: included 150, not included 23, not enough information 174, not applicable 9;
+  excluded 10, not excluded 484, not enough information 119, not applicable 46.
+- Notes are pre-numbered `"0. sentence"` lines, always consecutive from 0 (verified on all 53).
+- Split (seed 42, patient-level 37/8/8): **train 603 rows / val 206 / test 206**.
+- Token stats (Qwen tokenizer, prompt+target): max 595, mean ~300, p95 474; **0 examples exceed
+  MAX_SEQ_LEN=2048** -> `results/truncation_report.json`, no gold evidence truncated.
+- Only 10 `excluded` and 23 `not included` examples exist, so those classes are rare; macro-F1
+  over 4 classes per criterion type will be noisy on val/test (206 rows each).
 
 ## Open problems / blockers
 - None yet.

@@ -147,7 +147,12 @@ class TrainConfig:
     logging_steps: int = 5
     smoke_max_steps: int = 2
     smoke_num_examples: int = 8
-    sweep_configs: tuple[tuple[int, float], ...] = ((8, 1e-4), (8, 2e-4), (16, 1e-4), (16, 2e-4))
+    sweep_configs: tuple[tuple[int, float], ...] = (
+        (8, 1e-4),
+        (8, 2e-4),
+        (16, 1e-4),
+        (16, 2e-4),
+    )
 
 
 @dataclass(frozen=True)
@@ -177,6 +182,11 @@ class BenchmarkConfig:
 # --------------------------------------------------------------------------------------
 FP32_ATOL: Final[float] = 1e-5
 FP16_ATOL: Final[float] = 1e-2
+
+#: Ready-made default configuration instances (frozen, so safe to share).
+TRAINING: Final[TrainConfig] = TrainConfig()
+GENERATION: Final[GenerationConfig] = GenerationConfig()
+BENCHMARK: Final[BenchmarkConfig] = BenchmarkConfig()
 
 # --------------------------------------------------------------------------------------
 # Application
