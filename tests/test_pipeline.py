@@ -93,10 +93,21 @@ def test_assemble_maps_labels_evidence_and_outcome() -> None:
         "The patient has diabetes.",
         "She takes metformin.",
     )
-    assert result.items[0].explanation == c.APP_EXPLANATIONS["included"]
+    assert result.items[0].explanation.startswith(c.APP_EXPLANATIONS["included"])
+    assert "The patient has diabetes." in result.items[0].explanation
+    assert c.APP_NO_EVIDENCE not in result.items[0].explanation
     assert result.items[0].strict is True
     assert sum(item.latency_s for item in result.items) == pytest.approx(0.75)
     assert result.missing_information == ()
+
+
+def test_no_evidence_uses_the_required_wording() -> None:
+    """A prediction without cited sentences says so explicitly in its explanation."""
+    criteria = [CriterionSpec(EXC, "Is pregnant")]
+    completions = [('{"label": "not excluded", "evidence_ids": []}', 0.1)]
+    result = ScreeningPipeline.assemble(NOTE, criteria, completions, provenance())
+    assert result.items[0].evidence_text == ()
+    assert c.APP_NO_EVIDENCE in result.items[0].explanation
 
 
 def test_assemble_collects_missing_information_and_invalid_output() -> None:

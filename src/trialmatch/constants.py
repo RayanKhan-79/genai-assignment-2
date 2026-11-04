@@ -239,3 +239,7 @@ APP_EXPLANATIONS: Final[Mapping[str, str]] = MappingProxyType(
         "output.",
     }
 )
+#: Required wording when a prediction cites no evidence (PLAN section 1).
+APP_NO_EVIDENCE: Final[str] = (
+    "No supporting evidence cited; this is not proof of eligibility or ineligibility."
+)
