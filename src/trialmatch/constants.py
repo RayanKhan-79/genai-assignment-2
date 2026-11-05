@@ -188,6 +188,15 @@ class BenchmarkConfig:
 
 
 # --------------------------------------------------------------------------------------
+# Plotting
+# --------------------------------------------------------------------------------------
+#: Backend forced before importing matplotlib. Colab exports
+#: ``MPLBACKEND=module://matplotlib_inline.backend_inline``, a module the uv environment does not
+#: contain, so the default import fails there.
+MPL_BACKEND: Final[str] = "Agg"
+
+
+# --------------------------------------------------------------------------------------
 # Numerical tolerances
 # --------------------------------------------------------------------------------------
 FP32_ATOL: Final[float] = 1e-5

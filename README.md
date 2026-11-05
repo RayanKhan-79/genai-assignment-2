@@ -119,6 +119,19 @@ uv run python -m trialmatch.train --output-dir /content/drive/MyDrive/trialmatch
 Outputs: `results/train_log.json`, `report/figures/train_curves.pdf`, adapter in the Drive folder
 (`adapter_model.safetensors`, `adapter_config.json`, tokenizer files).
 
+If training finishes but the final plotting step fails (older checkout: Colab exports
+`MPLBACKEND=module://matplotlib_inline.backend_inline`, which the `uv` environment does not contain),
+the adapter and `results/train_log.json` are already saved. Pull the fix and redraw the curve without
+retraining:
+
+```bash
+git pull
+uv run python -m trialmatch.train --plot-results results/train_log.json
+```
+
+The current code forces the headless `Agg` backend and treats a plotting failure as a warning, so a
+finished run can never be lost this way.
+
 ### Job 2 - optional hyper-parameter sweep (about 1.5-2.5 h)
 
 ```bash

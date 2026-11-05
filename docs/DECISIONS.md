@@ -169,3 +169,22 @@ definition rather than against itself. Unsupported SDPA backends are recorded as
   second test invocation just for the error analysis.
 - **README results table** lists the exact backing file for every number and marks it `TODO(user)`
   until the job has run, which is the checklist the final audit will use.
+
+## D19. Headless matplotlib and non-fatal plotting (job-1 bugfix) — 2026-11-05
+- **Symptom.** On Colab, job 1 trained all three epochs and saved the adapter and
+  `results/train_log.json`, then died in `TrainCurvePlotter.plot` with
+  `ValueError: Key backend: 'module://matplotlib_inline.backend_inline' is not a valid value`.
+- **Cause.** Colab exports `MPLBACKEND=module://matplotlib_inline.backend_inline`. That Python module
+  lives in Colab's system environment, not in the `uv` venv where the job runs, so matplotlib cannot
+  resolve the backend at import time. `matplotlib.use("Agg")` is too late: the failure happens on
+  `import matplotlib`.
+- **Fix.** Set `os.environ["MPLBACKEND"] = constants.MPL_BACKEND` (`"Agg"`) *before* importing
+  matplotlib in every plotting path (training curve, confusion matrices, three benchmark suites, app
+  figure). Alternative rejected: adding `matplotlib-inline` as a dependency — it is a notebook
+  integration, not something a saved PDF needs.
+- **No silent loss.** `_write_log` writes the JSON first and wraps the plot in `try/except`: the
+  adapter and log are already on disk, so a drawing failure prints a warning plus the exact
+  regeneration command instead of aborting the job. `train --plot-results <json>` redraws the figure
+  without retraining, which is what job 1 needs.
+- **Test.** `tests/test_train.py` runs the plotter in a subprocess with the invalid Colab value and
+  asserts a `%PDF` file is produced, so the regression cannot come back unnoticed.

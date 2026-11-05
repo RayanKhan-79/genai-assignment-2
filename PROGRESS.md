@@ -1,6 +1,6 @@
 # PROGRESS
 
-Last updated: 2026-11-05T03:20 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-05T07:55 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
 **STOP POINT 2 reached.** All code and all results-independent documentation is done. The user runs
@@ -98,7 +98,8 @@ R1-R10 audit.
 
 ## Awaiting user (jobs only the user can run / things needed)
 **STOP POINT 2 - remaining work, in order (exact commands in README "Long-running jobs"):**
-- [ ] Job 1 (if not finished) - train: `uv run python -m trialmatch.train --output-dir /content/drive/MyDrive/trialmatch/adapter` (20-40 min; `--resume` after a disconnect).
+- [x] Job 1 - training finished on Colab (3 epochs, train loss 0.1014, eval loss 0.1334/0.1194/0.1250, 708 s); adapter + `results/train_log.json` saved.
+- [ ] Regenerate `report/figures/train_curves.pdf` after `git pull`: `uv run python -m trialmatch.train --plot-results results/train_log.json`. Then commit/push `results/` + `report/figures/`.
 - [ ] Job 2 (optional) - sweep: `uv run python -m trialmatch.train --sweep`.
 - [ ] Job 3 - validation eval: `uv run python -m trialmatch.evaluate --split val --model base`, the same with `--model finetuned --adapter /content/drive/MyDrive/trialmatch/adapter`, plus `--decode cached` for the equivalence check.
 - [ ] Job 4 - test eval exactly once: `--split test --final` for base and `--model finetuned --adapter ... --final --errors`.
@@ -139,7 +140,13 @@ R1-R10 audit.
   the same constant token) — wiring check only, real numbers come from Colab job 5.
 - App smoke (0.5B base, CPU/MPS): 2 criteria with KV cache in 1.20 s; live benchmark ran three
   decoders on a 169-token prompt with a 32-token budget; UI config has 37 components.
-- Test suite at STOP POINT 2: 74 tests, mypy --strict clean over 21 source files, ruff clean.
+- Test suite at STOP POINT 2 + plotting fix: 75 tests, mypy --strict clean over 22 source files,
+  ruff clean.
+- Colab sets `MPLBACKEND=module://matplotlib_inline.backend_inline`; that module is not installed in
+  the uv venv, so `import matplotlib` raised `ValueError: Key backend` after job 1 finished training.
+  All plotters now set `MPLBACKEND=Agg` (constant `MPL_BACKEND`) before importing matplotlib.
+- Job 1 real numbers (from the Colab log, files not yet pushed): train loss 0.1014, eval loss
+  0.1334 (epoch 1), 0.1194 (epoch 2), 0.1250 (epoch 3), train runtime 708 s, 3 epochs.
 - Explanations are deterministic: `APP_EXPLANATIONS[label]` + quoted cited sentences, or
   `APP_NO_EVIDENCE` (the wording PLAN section 1 requires) when nothing is cited.
 - arXiv/publisher checks done this session for every entry in `report/refs.bib` (TrialGPT DOI
@@ -150,6 +157,14 @@ R1-R10 audit.
 - None yet.
 
 ## Session log (append-only, newest last)
+- 2026-11-05T07:55 opencode: Fixed the job-1 crash. Training had completed and saved the adapter and
+  `results/train_log.json`; only `TrainCurvePlotter.plot` failed because Colab exports the
+  `matplotlib_inline` backend, absent from the uv venv. Every plotter (train, evaluation confusion
+  matrices, three benchmark suites, app) now forces `MPLBACKEND=Agg` from `constants.MPL_BACKEND`
+  before importing matplotlib, `_write_log` treats plotting as non-fatal, and
+  `train --plot-results <train_log.json>` redraws the figure without retraining. New
+  `tests/test_train.py` reproduces the Colab environment in a subprocess. Gate green: 75 tests,
+  mypy clean over 22 files.
 - 2026-11-05T03:20 opencode: STOP POINT 2 self-review (PLAN A.2.1). (1) Quality gate green: ruff
   format/check clean, `mypy --strict` clean over 21 files, **74 tests pass** (`uv run pytest`). (2)
   R1-R10 re-checked on the touched files: only `uv run` commands in README/scripts; every new

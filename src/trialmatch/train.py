@@ -48,9 +48,12 @@ class TrainCurvePlotter:
     @staticmethod
     def plot(history: Sequence[dict[str, Any]], path: Path = c.TRAIN_CURVES_PATH) -> None:
         """Write a PDF with training loss per step and validation loss per epoch."""
+        import os
+
+        os.environ["MPLBACKEND"] = c.MPL_BACKEND  # Colab's inline backend is not installed here
         import matplotlib
 
-        matplotlib.use("Agg")
+        matplotlib.use(c.MPL_BACKEND)
         import matplotlib.pyplot as plt
 
         train = [(entry["step"], entry["loss"]) for entry in history if "loss" in entry]
@@ -205,7 +208,14 @@ class FineTuner:
             figure_path = self._output_dir / "train_curves.pdf"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text(json.dumps(list(history), indent=2) + "\n", encoding="utf-8")
-        TrainCurvePlotter.plot(history, figure_path)
+        try:
+            TrainCurvePlotter.plot(history, figure_path)
+        except Exception as error:  # the adapter and the JSON are already saved: never lose them
+            print(f"warning: could not draw {figure_path}: {error}")
+            print(
+                "regenerate later with: "
+                f"uv run python -m trialmatch.train --plot-results {log_path}"
+            )
 
 
 class Sweeper:
@@ -261,7 +271,19 @@ def main() -> None:
     parser.add_argument("--resume", action="store_true", help="resume from the last checkpoint")
     parser.add_argument("--smoke", action="store_true", help="2 steps, 8 examples, 0.5B model")
     parser.add_argument("--sweep", action="store_true", help="run the 4-config sweep")
+    parser.add_argument(
+        "--plot-results",
+        type=Path,
+        default=None,
+        help="regenerate report/figures/train_curves.pdf from an existing train_log.json and exit",
+    )
     args = parser.parse_args()
+
+    if args.plot_results is not None:
+        history = json.loads(args.plot_results.read_text(encoding="utf-8"))
+        TrainCurvePlotter.plot(history)
+        print(f"wrote {c.TRAIN_CURVES_PATH}")
+        return
 
     annotations = AnnotationLoader().load()
     manager = SplitManager()

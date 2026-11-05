@@ -257,9 +257,12 @@ class ConfusionPlotter:
     @staticmethod
     def plot(block: dict[str, Any], title: str, path: Path) -> None:
         """Write one confusion matrix as a PDF."""
+        import os
+
+        os.environ["MPLBACKEND"] = c.MPL_BACKEND  # Colab's inline backend is not installed here
         import matplotlib
 
-        matplotlib.use("Agg")
+        matplotlib.use(c.MPL_BACKEND)
         import matplotlib.pyplot as plt
 
         matrix = np.asarray(block["confusion"], dtype=float)

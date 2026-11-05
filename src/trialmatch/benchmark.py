@@ -125,9 +125,12 @@ class BenchmarkPlotter:
         document: dict[str, Any], path: Path = c.FIGURES_DIR / "bench_decoding.pdf"
     ) -> None:
         """Plot mean latency and throughput against output length."""
+        import os
+
+        os.environ["MPLBACKEND"] = c.MPL_BACKEND  # Colab's inline backend is not installed here
         import matplotlib
 
-        matplotlib.use("Agg")
+        matplotlib.use(c.MPL_BACKEND)
         import matplotlib.pyplot as plt
 
         grid = document["grid"]
@@ -293,9 +296,12 @@ class AttentionPlotter:
     @staticmethod
     def plot(document: dict[str, Any], path: Path = c.FIGURES_DIR / "bench_attention.pdf") -> None:
         """Write latency (log-log) and peak memory against sequence length."""
+        import os
+
+        os.environ["MPLBACKEND"] = c.MPL_BACKEND  # Colab's inline backend is not installed here
         import matplotlib
 
-        matplotlib.use("Agg")
+        matplotlib.use(c.MPL_BACKEND)
         import matplotlib.pyplot as plt
 
         figure, (left, right) = plt.subplots(1, 2, figsize=(10, 3.8))
@@ -487,9 +493,12 @@ class SpeculativePlotter:
         document: dict[str, Any], path: Path = c.FIGURES_DIR / "bench_speculative.pdf"
     ) -> None:
         """Draw latency and acceptance rate per gamma against the cached baseline."""
+        import os
+
+        os.environ["MPLBACKEND"] = c.MPL_BACKEND  # Colab's inline backend is not installed here
         import matplotlib
 
-        matplotlib.use("Agg")
+        matplotlib.use(c.MPL_BACKEND)
         import matplotlib.pyplot as plt
 
         rows = document["rows"]

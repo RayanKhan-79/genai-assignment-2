@@ -432,9 +432,12 @@ def _raw_markdown(result: ScreeningResult) -> str:
 
 def _benchmark_figure(rows: list[list[Any]]) -> Any:
     """Build the two-panel latency/throughput figure for the benchmark tab."""
+    import os
+
+    os.environ["MPLBACKEND"] = c.MPL_BACKEND  # Colab's inline backend is not installed here
     import matplotlib
 
-    matplotlib.use("Agg")
+    matplotlib.use(c.MPL_BACKEND)
     import matplotlib.pyplot as plt
 
     names = [row[0] for row in rows]
