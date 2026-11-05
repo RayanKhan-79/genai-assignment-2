@@ -223,7 +223,8 @@ class MetricsCalculator:
             fn += len(gold) - hit
             precision = hit / len(pred)
             recall = hit / len(gold)
-            per_record.append((precision, recall, 2 * precision * recall / (precision + recall)))
+            f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+            per_record.append((precision, recall, f1))
         if tp + fp + fn == 0:
             micro = (1.0, 1.0, 1.0)
         else:
