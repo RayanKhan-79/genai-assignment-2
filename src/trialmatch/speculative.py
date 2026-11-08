@@ -152,10 +152,10 @@ class SpeculativeDecoder(Decoder):
             drafted += budget
             accepted += matched
 
-            target_cache.crop(budget - matched)
+            target_cache.crop(matched - budget)
             draft_drop = budget - matched - 1
             if draft_drop > 0:
-                draft_cache.crop(draft_drop)
+                draft_cache.crop(-draft_drop)
             elif draft_drop < 0:
                 # Every proposal matched: the draft must consume the last one it has not seen.
                 draft_cache, _ = self._step(self._draft, draft_cache, proposals[-1])

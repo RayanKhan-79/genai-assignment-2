@@ -99,6 +99,77 @@ def test_long_generation_with_full_acceptance() -> None:
     assert stats.draft_forward_calls == stats.drafted + stats.rounds
 
 
+class ForcedDraft(torch.nn.Module):
+    """Draft model whose next token is scripted, so acceptance can be forced.
+
+    The base forward still builds a real KV cache, which keeps the cache bookkeeping under test;
+    only the logits are replaced, one scripted token per call.
+    """
+
+    def __init__(self, base: Qwen2ForCausalLM, tokens: list[int]) -> None:
+        """Store the base model and the token to force at each single-token draft step."""
+        super().__init__()
+        if not tokens:
+            raise ValueError("at least one scripted token is required")
+        self._base = base
+        self._tokens = tokens
+        self._calls = 0
+
+    def forward(self, *args: Any, **kwargs: Any) -> Any:
+        """Delegate the forward pass and overwrite the logits with a one-hot script."""
+        output = self._base(*args, **kwargs)
+        if output.logits is None:
+            raise ValueError("base model returned no logits")
+        # The prefill call only warms the cache; the script advances on one-token steps.
+        length = int(kwargs["input_ids"].shape[1])
+        index = 0
+        if length == 1:
+            index = min(self._calls, len(self._tokens) - 1)
+            self._calls += 1
+        logits = torch.full_like(output.logits, -100.0)
+        logits[..., self._tokens[index]] = 100.0
+        output.logits = logits
+        return output
+
+
+def test_rejected_proposals_are_cropped() -> None:
+    """A draft that never agrees must still leave the target's exact greedy tokens.
+
+    This is the regression test for ``Cache.crop``: transformers 5 rejects a positive count, so a
+    rejected proposal used to abort the warm-up run instead of cropping the verifier cache.
+    """
+    target = tiny_model(layers=2, seed=0)
+    ids = prompt(7)
+    reference = reference_tokens(target, ids, 6)
+    wrong = next(token for token in range(VOCAB) if token not in reference)
+    draft = cast(Any, ForcedDraft(target, [wrong] * 32))
+    decoder = SpeculativeDecoder(target, draft, [], torch.device("cpu"), gamma=3)
+    result = decoder.generate(ids, 6)
+    assert result.tokens == reference
+    stats = result.stats
+    assert isinstance(stats, SpeculativeStats)
+    assert stats.accepted == 0
+    assert stats.drafted > 0
+
+
+def test_partial_acceptance_matches_target() -> None:
+    """A mix of accepted and rejected proposals still reproduces the target's greedy sequence."""
+    target = tiny_model(layers=2, seed=1)
+    ids = prompt(9)
+    reference = reference_tokens(target, ids, 10)
+    wrong = next(token for token in range(VOCAB) if token not in reference)
+    scripted: list[int] = []
+    for position in range(1, 24):
+        scripted.append(reference[position % len(reference)] if position % 2 else wrong)
+    draft = cast(Any, ForcedDraft(target, scripted))
+    decoder = SpeculativeDecoder(target, draft, [], torch.device("cpu"), gamma=2)
+    result = decoder.generate(ids, 10)
+    assert result.tokens == reference
+    stats = result.stats
+    assert isinstance(stats, SpeculativeStats)
+    assert 0 < stats.accepted < stats.drafted
+
+
 def test_eos_stops_generation() -> None:
     """The first emitted token being EOS ends the run immediately and is kept."""
     target = tiny_model(layers=2, seed=4)

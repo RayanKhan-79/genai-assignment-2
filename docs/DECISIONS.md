@@ -188,3 +188,20 @@ definition rather than against itself. Unsupported SDPA backends are recorded as
   without retraining, which is what job 1 needs.
 - **Test.** `tests/test_train.py` runs the plotter in a subprocess with the invalid Colab value and
   asserts a `%PDF` file is produced, so the regression cannot come back unnoticed.
+
+## D20. `Cache.crop` takes a negative count; forced-rejection tests (job-5 bugfix) — 2026-11-08
+- **Symptom.** The speculative benchmark crashed on its first warm-up round with
+  `ValueError: Calling crop with a positive value (2) is not supported`.
+- **Cause.** transformers 5 changed `DynamicLayer.crop`: a negative argument removes that many tokens,
+  a positive argument raises (the old behaviour treated a positive value as a target absolute size).
+  Our loop passed `budget - matched`, which is positive whenever the draft is rejected.
+- **Why tests missed it.** With tiny random Qwen2 models both target and draft collapse to one
+  constant token, so every proposal matched and only `crop(0)` ran; the lossless test therefore
+  never covered the rejection path. This is exactly the kind of gap the plan warns about.
+- **Fix.** `target_cache.crop(matched - budget)` and `draft_cache.crop(-draft_drop)`; the docstring
+  now states the sign convention. The original cache invariant is unchanged.
+- **Tests.** A `ForcedDraft` wrapper overwrites logits (one scripted token per single-token step,
+  prefill excluded) while still using the real KV cache. `test_rejected_proposals_are_cropped` forces
+  every proposal to be rejected and asserts exact target equality with zero acceptance;
+  `test_partial_acceptance_matches_target` mixes accepted and rejected proposals and asserts exact
+  equality with `0 < accepted < drafted`. Both fail on the old sign, so the regression is covered.
