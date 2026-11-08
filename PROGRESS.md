@@ -1,12 +1,29 @@
 # PROGRESS
 
-Last updated: 2026-11-05T07:55 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-08T18:30 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
-**STOP POINT 2 reached.** All code and all results-independent documentation is done. The user runs
-Colab jobs 3-6 and the remaining user-only tasks listed under "Awaiting user", pushes `results/` and
-`report/figures/`, then the agent fills the report, finishes the error analysis and does the final
-R1-R10 audit.
+Job 5 was blocked by a `Cache.crop` bug (transformers 5 wants a negative count); fixed in the speculative-crop commit,
+user re-runs the three suites. Jobs 3-4 results are ingested and the validation/test tables plus the
+error discussion in `report/main.tex` are filled. After job 5: fill the three benchmark tables and
+figures, fix the abstract numbers, then final R1-R10 audit.
+
+## Results ingested (jobs 1, 3, 4)
+
+| Run | Accuracy | Macro F1 | Evidence micro / macro F1 | Invalid |
+|-----|----------|----------|---------------------------|---------|
+| val base hf | 0.0146 | 0.0089 | 0.101 / 0.167 | 0.0 |
+| val finetuned hf | 0.7039 | 0.3380 | 0.569 / 0.761 | 0.0 |
+| val finetuned cached | 0.7039 | 0.3380 | 0.569 / 0.761 | 0.0 |
+| test base hf | 0.0194 | 0.0529 | 0.050 / 0.184 | 0.0 |
+| test finetuned hf | 0.7136 | 0.3730 | 0.543 / 0.803 | 0.0 |
+
+- `val_finetuned_cached` raw outputs are byte-identical to `val_finetuned_hf` on all 206 records
+  (hand-written KV cache == `model.generate` on the real fp16 model).
+- Fine-tuned model never predicts `not included`, `not applicable` or `excluded`; base model predicts
+  only `not applicable` and `excluded` (plus one `not included` on test).
+- Error dump: 92 cases (wrong_label 56, missing_evidence 16, unsupported_evidence 9, extra_evidence
+  8, not_applicable_vs_not_enough_information 3).
 
 ## Phase status
 | Phase | Status | Commit/tag | Notes |
@@ -101,9 +118,11 @@ R1-R10 audit.
 - [x] Job 1 - training finished on Colab (3 epochs, train loss 0.1014, eval loss 0.1334/0.1194/0.1250, 708 s); adapter + `results/train_log.json` saved.
 - [ ] Regenerate `report/figures/train_curves.pdf` after `git pull`: `uv run python -m trialmatch.train --plot-results results/train_log.json`. Then commit/push `results/` + `report/figures/`.
 - [ ] Job 2 (optional) - sweep: `uv run python -m trialmatch.train --sweep`.
-- [ ] Job 3 - validation eval: `uv run python -m trialmatch.evaluate --split val --model base`, the same with `--model finetuned --adapter /content/drive/MyDrive/trialmatch/adapter`, plus `--decode cached` for the equivalence check.
-- [ ] Job 4 - test eval exactly once: `--split test --final` for base and `--model finetuned --adapter ... --final --errors`.
-- [ ] Job 5 - benchmarks: `--suite decoding`, `--suite attention`, `--suite speculative --model finetuned --adapter ...`.
+- [x] Job 3 - validation eval done: `results/val_{base,finetuned}_hf.json` and `val_finetuned_cached.json` (cached == hf byte-for-byte).
+- [x] Job 4 - test eval done once: `results/test_{base,finetuned}_hf.json`, `results/error_cases.md` (206 + 206 records, 92 error cases).
+- [ ] Job 5 - benchmarks: re-run all three after `git pull` (the speculative suite crashed on a
+  transformers-5 `Cache.crop` sign bug, now fixed): `--suite decoding`, `--suite attention`,
+  `--suite speculative --model finetuned --adapter ...`.
 - [ ] Job 6 - upload adapter: `uv run hf upload RayanKhan-79/genai-assignment-2 /content/drive/MyDrive/trialmatch/adapter`.
 - [ ] Push `results/` + `report/figures/` after each job (`git add results report/figures && git commit && git push`).
 - [ ] Compile `report/main.tex` on Overleaf; replace every red `TODO(user)` placeholder; add screenshots (`report/figures/app_*.png`) and the 5-7 min video link.
@@ -142,6 +161,10 @@ R1-R10 audit.
   decoders on a 169-token prompt with a 32-token budget; UI config has 37 components.
 - Test suite at STOP POINT 2 + plotting fix: 75 tests, mypy --strict clean over 22 source files,
   ruff clean.
+- `transformers` 5 `Cache.crop(k)` expects a **negative** `k` (positive raises); the speculative
+  benchmark hit this on the first warm-up round because the previous tests never produced a rejected
+  proposal (random tiny models collapse to one token, so every draft matched). Fixed; two new tests
+  force total and partial rejection.
 - Colab sets `MPLBACKEND=module://matplotlib_inline.backend_inline`; that module is not installed in
   the uv venv, so `import matplotlib` raised `ValueError: Key backend` after job 1 finished training.
   All plotters now set `MPLBACKEND=Agg` (constant `MPL_BACKEND`) before importing matplotlib.
@@ -157,6 +180,13 @@ R1-R10 audit.
 - None yet.
 
 ## Session log (append-only, newest last)
+- 2026-11-08T18:30 opencode: Ingested jobs 1, 3 and 4 from `origin/main` (commit `bd49b03`) and filled
+  the validation/test classification, evidence and error tables in `report/main.tex` from
+  `results/*.json` only. Fixed the job-5 crash: local tests had never exercised a rejected draft, so
+  `Cache.crop(budget - matched)` passed a positive count, which transformers 5 rejects. The loop now
+  passes zero/negative counts, the module docstring states the convention, and two new
+  `ForcedDraft` tests force total and partial rejection (77 tests total). Speculative smoke green.
+  Still pending: job 5 numbers/figures, job 6 adapter upload, screenshots/video, final audit.
 - 2026-11-05T07:55 opencode: Fixed the job-1 crash. Training had completed and saved the adapter and
   `results/train_log.json`; only `TrainCurvePlotter.plot` failed because Colab exports the
   `matplotlib_inline` backend, absent from the uv venv. Every plotter (train, evaluation confusion

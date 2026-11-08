@@ -37,7 +37,10 @@ legal label set together with the patient-sentence identifiers that support the 
 explanations shown to users are generated deterministically from the label and the cited sentences,
 never by the model. We fine-tune Qwen2.5-1.5B-Instruct with a low-rank adapter on the TrialGPT
 criterion annotations~\cite{jin2024trialgpt} and evaluate classification and evidence quality on a
-patient-level split. On top of the fine-tuned model we implement three inference components from
+patient-level split: validation accuracy rises from $1.5\%$ (base) to $70.4\%$ (fine-tuned), test
+accuracy from $1.9\%$ to $71.4\%$, while macro-F1 stays near $0.37$ because the adapter never emits
+the three rarest labels. The KV-cached decoder reproduces the Hugging Face baseline byte-for-byte on
+all 206 validation records. On top of the fine-tuned model we implement three inference components from
 scratch: an explicit KV-cache decoding loop with a loop-free reference, a tiled attention kernel
 with an online softmax~\cite{milakov2018online,dao2022flashattention}, and greedy speculative
 decoding with a 0.5B draft model~\cite{leviathan2023speculative,chen2023speculative}. All three are
@@ -277,10 +280,24 @@ reports acceptance rate and speedup against the cached target on eight validatio
 \section{Results and Discussion}
 
 \subsection{Fine-tuning and classification}
-Figure~\ref{fig:curves} shows the training and validation loss. Table~\ref{tab:classification}
-compares the base and fine-tuned models on the validation split for both decoding-time variants; the
-test split is reported once in Table~\ref{tab:test}. \pending{fill every cell from
-\texttt{results/val\_*.json} and \texttt{results/test\_*.json}.}
+Figure~\ref{fig:curves} shows the training and validation loss: the best validation loss is reached
+at epoch 2 ($0.1194$ versus $0.1334$ after epoch 1 and $0.1250$ after epoch 3), and that checkpoint
+is the adapter evaluated below. Table~\ref{tab:classification} compares the base and fine-tuned
+models on validation, and Table~\ref{tab:test} reports the single test pass.
+
+The base model does not follow the task at all: on validation it never emits an inclusion label and
+predicts only \texttt{not applicable} (68 of 206 records) or \texttt{excluded} (138), giving $1.5\%$
+accuracy. The fine-tuned adapter follows the JSON contract on every record (strict parse $100\%$,
+invalid $0\%$) and reaches $70.4\%$ validation and $71.4\%$ test accuracy, but it collapses the rare
+labels: it never predicts \texttt{not included}, \texttt{not applicable} or \texttt{excluded}, so
+those per-class F1 scores are zero and macro-F1 stays at $0.34$/$0.37$ while accuracy looks much
+better. The gap between accuracy and macro-F1 is the main result to keep in mind: the model is
+usable as a majority-class screening aid, not as a balanced four-way classifier.
+
+Table~\ref{tab:classification} also contains the hand-written KV-cached decoder. On all 206
+validation records it produced \textbf{byte-identical raw output} to \texttt{model.generate}
+(identical accuracy, confusion matrix and every metric), which is the real-model equivalence check
+for the cache implementation; only latency changes.
 
 \begin{figure}[t]
 \centering
@@ -291,15 +308,16 @@ test split is reported once in Table~\ref{tab:test}. \pending{fill every cell fr
 
 \begin{table}[t]
 \centering
-\caption{Validation classification results (macro averages).}
+\caption{Validation classification results. Precision/recall/F1 are macro averages over the six
+legal labels; invalid is the share of unparseable outputs.}
 \label{tab:classification}
 \begin{tabular}{llcccc}
 \toprule
 Model & Decode & Prec. & Rec. & F1 & Invalid \\
 \midrule
-Base & hf & \pending{} & \pending{} & \pending{} & \pending{} \\
-Fine-tuned & hf & \pending{} & \pending{} & \pending{} & \pending{} \\
-Fine-tuned & cached & \pending{} & \pending{} & \pending{} & \pending{} \\
+Base & hf & 0.005 & 0.181 & 0.009 & 0.0\% \\
+Fine-tuned & hf & 0.358 & 0.337 & 0.338 & 0.0\% \\
+Fine-tuned & cached & 0.358 & 0.337 & 0.338 & 0.0\% \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -312,38 +330,53 @@ Fine-tuned & cached & \pending{} & \pending{} & \pending{} & \pending{} \\
 \toprule
 Model & Macro F1 & Evidence micro F1 & Invalid rate & $n$ \\
 \midrule
-Base & \pending{} & \pending{} & \pending{} & \pending{} \\
-Fine-tuned & \pending{} & \pending{} & \pending{} & \pending{} \\
+Base & 0.053 & 0.050 & 0.0\% & 206 \\
+Fine-tuned & 0.373 & 0.543 & 0.0\% & 206 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Figure~\ref{fig:confusion} shows the confusion matrices; inclusion and exclusion criteria are kept
-separate because their label sets are disjoint. \pending{interpret the dominant confusion pairs.}
+Figure~\ref{fig:confusion} shows the overall confusion matrix (per-type matrices are in
+\texttt{report/figures}). Inclusion and exclusion criteria are kept separate because their label sets
+are disjoint. Errors are dominated by the majority class: 28 of the 66 gold
+\texttt{not enough information} records on test are predicted \texttt{not excluded}, 12 of 15
+\texttt{not applicable} records become \texttt{not excluded}, and 9 of 27 \texttt{included} records
+become \texttt{not enough information}; the reverse direction appears too, with 7 gold
+\texttt{not included} records predicted \texttt{not enough information}. No test record is predicted
+\texttt{excluded}, so that column of the matrix is empty. The pattern is consistent with a model that
+learned the majority label of each criterion type and the \texttt{not enough information} fallback,
+rather than the boundary between ``satisfied'', ``not satisfied'' and ``inapplicable''.
 
 \begin{figure}[t]
 \centering
-\pendingfigure{figures/val_finetuned_hf_confusion.pdf}{Confusion matrices: generated by Colab job 3.}
+\pendingfigure{figures/val_finetuned_hf_confusion_overall.pdf}{Confusion matrices: generated by Colab job 3.}
 \caption{Confusion matrices for the fine-tuned model on validation data.}
 \label{fig:confusion}
 \end{figure}
 
 \subsection{Evidence quality and error analysis}
-Table~\ref{tab:evidence} reports evidence precision, recall and F1 under the empty-set rule.
-\pending{summarise whether errors are label errors, evidence errors or both.} The error-analysis
-file \texttt{results/error\_cases.md} lists at least twelve failures with the note, criterion, gold
-label and prediction; Table~\ref{tab:errors} groups them by cause.
+Table~\ref{tab:evidence} reports evidence precision, recall and F1 under the empty-set rule; 116 of
+the 206 validation records have empty gold evidence, which is why macro-F1 ($0.76$) is much higher
+than micro-F1 ($0.57$): the model often cites something when the expert cited nothing. The
+fine-tuned model is nevertheless far better than the base model, which emits unusable citations
+(micro-F1 $0.10$, and 69 empty predictions against 116 empty gold sets). On test the same pattern
+holds (micro-F1 $0.54$, macro-F1 $0.80$). The error-analysis file \texttt{results/error\_cases.md}
+contains 92 cases with the note, criterion, gold label and prediction; Table~\ref{tab:errors} groups
+them by cause. Wrong labels dominate (56), followed by missing evidence (16), unsupported citations
+(9), over-citation (8) and the \texttt{not applicable}/\texttt{not enough information} confusion
+(3).
 
 \begin{table}[t]
 \centering
-\caption{Evidence-retrieval metrics on validation data.}
+\caption{Evidence-retrieval metrics on validation data (empty-set rule; ``empty preds'' counts
+records where the model cited nothing, against 116 records with empty gold evidence).}
 \label{tab:evidence}
 \begin{tabular}{lccc}
 \toprule
-Model & Micro F1 & Macro F1 & Empty-set errors \\
+Model & Micro F1 & Macro F1 & Empty preds \\
 \midrule
-Base & \pending{} & \pending{} & \pending{} \\
-Fine-tuned & \pending{} & \pending{} & \pending{} \\
+Base & 0.101 & 0.167 & 69 \\
+Fine-tuned & 0.569 & 0.761 & 137 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -356,10 +389,11 @@ Fine-tuned & \pending{} & \pending{} & \pending{} \\
 \toprule
 Category & Count & Example note \\
 \midrule
-Missed evidence & \pending{} & \pending{} \\
-Over-cited evidence & \pending{} & \pending{} \\
-Label confusion & \pending{} & \pending{} \\
-Unparseable output & \pending{} & \pending{} \\
+Wrong label & 56 & ann.\ 161 \\
+Missing evidence & 16 & ann.\ 179 \\
+Unsupported citation & 9 & ann.\ 166 \\
+Over-cited evidence & 8 & ann.\ 306 \\
+App.\ vs.\ insufficient info & 3 & ann.\ 422 \\
 \bottomrule
 \end{tabular}
 \end{table}
