@@ -1,0 +1,89 @@
+{
+  "suite": "speculative",
+  "target_model": "finetuned:Qwen/Qwen2.5-1.5B-Instruct",
+  "draft_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "device": "cuda",
+  "dtype": "float16",
+  "n_prompts": 8,
+  "max_new_tokens": 128,
+  "gammas": [
+    2,
+    4,
+    6
+  ],
+  "warmup_runs": 2,
+  "baseline": {
+    "latency_s": {
+      "mean": 4.812461315499434,
+      "std": 0.47814109304167257
+    },
+    "total_s": 38.49969052399547,
+    "total_tokens": 1024,
+    "tokens_per_s": 26.59761639802735
+  },
+  "rows": [
+    {
+      "gamma": 2,
+      "latency_s": {
+        "mean": 7.0362940851249505,
+        "std": 0.5131351864709287
+      },
+      "total_s": 56.290352680999604,
+      "total_tokens": 1024,
+      "tokens_per_s": 18.191394283902643,
+      "peak_mem_bytes": 5553390080,
+      "acceptance_rate": 0.8199481865284974,
+      "mean_accepted_per_round": 1.6356589147286822,
+      "rounds": 387,
+      "target_forward_calls": 395,
+      "draft_forward_calls": 1071,
+      "tokens_equal": true,
+      "mismatched_prompts": 0,
+      "speedup": 0.6839482911428046
+    },
+    {
+      "gamma": 4,
+      "latency_s": {
+        "mean": 7.3399096213751704,
+        "std": 0.9577440559375305
+      },
+      "total_s": 58.719276971001364,
+      "total_tokens": 1024,
+      "tokens_per_s": 17.438906826214915,
+      "peak_mem_bytes": 5784204800,
+      "acceptance_rate": 0.6983240223463687,
+      "mean_accepted_per_round": 2.7573529411764706,
+      "rounds": 272,
+      "target_forward_calls": 280,
+      "draft_forward_calls": 1240,
+      "tokens_equal": true,
+      "mismatched_prompts": 0,
+      "speedup": 0.6556567537949867
+    },
+    {
+      "gamma": 6,
+      "latency_s": {
+        "mean": 7.577390060374967,
+        "std": 1.4707890707251805
+      },
+      "total_s": 60.61912048299973,
+      "total_tokens": 1024,
+      "tokens_per_s": 16.892359899665234,
+      "peak_mem_bytes": 6032822784,
+      "acceptance_rate": 0.6319498825371965,
+      "mean_accepted_per_round": 3.736111111111111,
+      "rounds": 216,
+      "target_forward_calls": 224,
+      "draft_forward_calls": 1390,
+      "tokens_equal": true,
+      "mismatched_prompts": 0,
+      "speedup": 0.6351080355049439
+    }
+  ],
+  "reference_check": {
+    "supported": true,
+    "hf_tokens": 16,
+    "prefix_length": 16,
+    "matches_prefix": true
+  }
+}

@@ -1,0 +1,215 @@
+{
+  "suite": "attention",
+  "device": "cuda",
+  "dtype": "float16",
+  "shape": {
+    "batch": 1,
+    "heads": 8,
+    "head_dim": 64,
+    "causal": true
+  },
+  "block": {
+    "q": 64,
+    "k": 64
+  },
+  "warmup_runs": 2,
+  "timed_runs": 5,
+  "rows": [
+    {
+      "length": 256,
+      "variants": {
+        "reference": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.0005619679999654181,
+            "std": 0.00014957358153492271
+          },
+          "peak_mem_bytes": 13041664,
+          "max_abs_err": 0.0014193058013916016,
+          "mean_abs_err": 6.137293530628085e-05
+        },
+        "tiled": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.007526061400039907,
+            "std": 0.00014608437571488034
+          },
+          "peak_mem_bytes": 11214848,
+          "max_abs_err": 0.0020933151245117188,
+          "mean_abs_err": 8.255871944129467e-05
+        },
+        "sdpa_math": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.0006642370000008669,
+            "std": 0.00012985772630404532
+          },
+          "peak_mem_bytes": 16646144,
+          "max_abs_err": 0.0009520053863525391,
+          "mean_abs_err": 2.4652637875988148e-05
+        },
+        "sdpa_efficient": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.00018015180003203569,
+            "std": 2.071708406796874e-05
+          },
+          "peak_mem_bytes": 2360320,
+          "max_abs_err": 0.0009520053863525391,
+          "mean_abs_err": 3.451353040873073e-05
+        },
+        "sdpa_flash": {
+          "supported": false,
+          "reason": "backend unavailable on this device"
+        }
+      }
+    },
+    {
+      "length": 512,
+      "variants": {
+        "reference": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.000496552800086647,
+            "std": 2.623440885488728e-05
+          },
+          "peak_mem_bytes": 21889024,
+          "max_abs_err": 0.0016052722930908203,
+          "mean_abs_err": 4.7394602006534114e-05
+        },
+        "tiled": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.02372971580007288,
+            "std": 0.0005818544998131673
+          },
+          "peak_mem_bytes": 13574144,
+          "max_abs_err": 0.001873016357421875,
+          "mean_abs_err": 6.76196941640228e-05
+        },
+        "sdpa_math": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.0011053895999793895,
+            "std": 0.00010305676682810592
+          },
+          "peak_mem_bytes": 31588352,
+          "max_abs_err": 0.0009050369262695312,
+          "mean_abs_err": 1.8002618162427098e-05
+        },
+        "sdpa_efficient": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.00023203579994515166,
+            "std": 1.4625569349856545e-05
+          },
+          "peak_mem_bytes": 4719616,
+          "max_abs_err": 0.0009050369262695312,
+          "mean_abs_err": 2.5783903765841387e-05
+        },
+        "sdpa_flash": {
+          "supported": false,
+          "reason": "backend unavailable on this device"
+        }
+      }
+    },
+    {
+      "length": 1024,
+      "variants": {
+        "reference": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.0012444596000023012,
+            "std": 1.8091600247026054e-05
+          },
+          "peak_mem_bytes": 52559872,
+          "max_abs_err": 0.0016133785247802734,
+          "mean_abs_err": 3.666599513962865e-05
+        },
+        "tiled": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.09030174220006301,
+            "std": 0.008354883706762448
+          },
+          "peak_mem_bytes": 18292736,
+          "max_abs_err": 0.001409769058227539,
+          "mean_abs_err": 5.6831420806702226e-05
+        },
+        "sdpa_math": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.00282140020008228,
+            "std": 1.524014912573454e-05
+          },
+          "peak_mem_bytes": 96477696,
+          "max_abs_err": 0.0009317398071289062,
+          "mean_abs_err": 1.3613649571198039e-05
+        },
+        "sdpa_efficient": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.0003673026000797108,
+            "std": 1.2953129078763038e-05
+          },
+          "peak_mem_bytes": 9438208,
+          "max_abs_err": 0.0010213851928710938,
+          "mean_abs_err": 1.962923488463275e-05
+        },
+        "sdpa_flash": {
+          "supported": false,
+          "reason": "backend unavailable on this device"
+        }
+      }
+    },
+    {
+      "length": 2048,
+      "variants": {
+        "reference": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.00463846079992436,
+            "std": 1.7578356553663395e-05
+          },
+          "peak_mem_bytes": 165806080,
+          "max_abs_err": 0.0015261173248291016,
+          "mean_abs_err": 2.7189926186110824e-05
+        },
+        "tiled": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.28483039720003944,
+            "std": 0.05115087969566476
+          },
+          "peak_mem_bytes": 27729920,
+          "max_abs_err": 0.0021185874938964844,
+          "mean_abs_err": 4.7705914766993374e-05
+        },
+        "sdpa_math": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.010186249599792063,
+            "std": 2.2060003357545133e-05
+          },
+          "peak_mem_bytes": 352338432,
+          "max_abs_err": 0.0009658336639404297,
+          "mean_abs_err": 9.895304174278863e-06
+        },
+        "sdpa_efficient": {
+          "supported": true,
+          "latency_s": {
+            "mean": 0.0009276397999201435,
+            "std": 2.366943060719203e-05
+          },
+          "peak_mem_bytes": 18875392,
+          "max_abs_err": 0.0009658336639404297,
+          "mean_abs_err": 1.4464145351666957e-05
+        },
+        "sdpa_flash": {
+          "supported": false,
+          "reason": "backend unavailable on this device"
+        }
+      }
+    }
+  ]
+}

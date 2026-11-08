@@ -1,0 +1,273 @@
+{
+  "suite": "decoding",
+  "warmup_runs": 2,
+  "timed_runs": 5,
+  "grid": {
+    "input_lengths": [
+      128,
+      512,
+      1024
+    ],
+    "output_lengths": [
+      32,
+      64,
+      128
+    ]
+  },
+  "rows": [
+    {
+      "input_len": 128,
+      "output_len": 32,
+      "uncached": {
+        "latency_s": {
+          "mean": 1.4305434053999306,
+          "std": 0.1558628767800264
+        },
+        "prefill_s": 0.043048156199984075,
+        "decode_s": 1.3874952491999466,
+        "tokens_per_s": 22.369122026782474,
+        "peak_mem_bytes": 4130326528,
+        "n_forward_calls": 32
+      },
+      "cached": {
+        "latency_s": {
+          "mean": 1.3134974798001622,
+          "std": 0.09348290494456504
+        },
+        "prefill_s": 0.04573652299995956,
+        "decode_s": 1.2677609568002026,
+        "tokens_per_s": 24.362437303548184,
+        "peak_mem_bytes": 3673814016,
+        "n_forward_calls": 32
+      },
+      "tokens_equal": true,
+      "speedup": 1.089110125751879
+    },
+    {
+      "input_len": 128,
+      "output_len": 64,
+      "uncached": {
+        "latency_s": {
+          "mean": 2.915152463000413,
+          "std": 0.28567672389220994
+        },
+        "prefill_s": 0.04402612959997896,
+        "decode_s": 2.871126333400434,
+        "tokens_per_s": 21.954254815931023,
+        "peak_mem_bytes": 4411556864,
+        "n_forward_calls": 64
+      },
+      "cached": {
+        "latency_s": {
+          "mean": 2.8128109604000655,
+          "std": 0.4383829382071785
+        },
+        "prefill_s": 0.050139844000023005,
+        "decode_s": 2.7626711164000426,
+        "tokens_per_s": 22.753039895328513,
+        "peak_mem_bytes": 3921179648,
+        "n_forward_calls": 64
+      },
+      "tokens_equal": true,
+      "speedup": 1.0363840670564621
+    },
+    {
+      "input_len": 128,
+      "output_len": 128,
+      "uncached": {
+        "latency_s": {
+          "mean": 6.313887610800293,
+          "std": 0.27721493094484995
+        },
+        "prefill_s": 0.04319657980004195,
+        "decode_s": 6.2706910310002515,
+        "tokens_per_s": 20.272771371642428,
+        "peak_mem_bytes": 4768614400,
+        "n_forward_calls": 128
+      },
+      "cached": {
+        "latency_s": {
+          "mean": 5.371422470200014,
+          "std": 0.44576117775773894
+        },
+        "prefill_s": 0.0495119700000032,
+        "decode_s": 5.32191050020001,
+        "tokens_per_s": 23.82981430154268,
+        "peak_mem_bytes": 4500846080,
+        "n_forward_calls": 128
+      },
+      "tokens_equal": true,
+      "speedup": 1.1754591350482966
+    },
+    {
+      "input_len": 512,
+      "output_len": 32,
+      "uncached": {
+        "latency_s": {
+          "mean": 4.045732608199932,
+          "std": 0.016430590610894386
+        },
+        "prefill_s": 0.1021998068000812,
+        "decode_s": 3.9435328013998516,
+        "tokens_per_s": 7.909568698421164,
+        "peak_mem_bytes": 6625632768,
+        "n_forward_calls": 32
+      },
+      "cached": {
+        "latency_s": {
+          "mean": 1.2808639240002322,
+          "std": 0.013317125764127148
+        },
+        "prefill_s": 0.08059435540008053,
+        "decode_s": 1.2002695686001517,
+        "tokens_per_s": 24.983137865310194,
+        "peak_mem_bytes": 5137886720,
+        "n_forward_calls": 32
+      },
+      "tokens_equal": true,
+      "speedup": 3.158596734901247
+    },
+    {
+      "input_len": 512,
+      "output_len": 64,
+      "uncached": {
+        "latency_s": {
+          "mean": 8.051930367800015,
+          "std": 0.03048827007882315
+        },
+        "prefill_s": 0.10021738999998889,
+        "decode_s": 7.9517129778000255,
+        "tokens_per_s": 7.948404553514088,
+        "peak_mem_bytes": 6831515648,
+        "n_forward_calls": 64
+      },
+      "cached": {
+        "latency_s": {
+          "mean": 2.7214641106005275,
+          "std": 0.26450716372228084
+        },
+        "prefill_s": 0.07927390459999514,
+        "decode_s": 2.6421902060005324,
+        "tokens_per_s": 23.516753261860046,
+        "peak_mem_bytes": 5724990976,
+        "n_forward_calls": 64
+      },
+      "tokens_equal": true,
+      "speedup": 2.9586759334567336
+    },
+    {
+      "input_len": 512,
+      "output_len": 128,
+      "uncached": {
+        "latency_s": {
+          "mean": 16.80378967419938,
+          "std": 0.04951945811187898
+        },
+        "prefill_s": 0.1055120175999491,
+        "decode_s": 16.69827765659943,
+        "tokens_per_s": 7.61732933354503,
+        "peak_mem_bytes": 7219267072,
+        "n_forward_calls": 128
+      },
+      "cached": {
+        "latency_s": {
+          "mean": 5.544985243000065,
+          "std": 0.46729154355439806
+        },
+        "prefill_s": 0.08435029180000128,
+        "decode_s": 5.460634951200063,
+        "tokens_per_s": 23.083920766351174,
+        "peak_mem_bytes": 6984134656,
+        "n_forward_calls": 128
+      },
+      "tokens_equal": true,
+      "speedup": 3.0304480422941285
+    },
+    {
+      "input_len": 1024,
+      "output_len": 32,
+      "uncached": {
+        "latency_s": {
+          "mean": 7.039528536000034,
+          "std": 0.03216699067906599
+        },
+        "prefill_s": 0.19740553340002406,
+        "decode_s": 6.84212300260001,
+        "tokens_per_s": 4.545758971833486,
+        "peak_mem_bytes": 9889995264,
+        "n_forward_calls": 32
+      },
+      "cached": {
+        "latency_s": {
+          "mean": 1.498408787400058,
+          "std": 0.12290771367566775
+        },
+        "prefill_s": 0.18015343820002272,
+        "decode_s": 1.3182553492000353,
+        "tokens_per_s": 21.35598794473458,
+        "peak_mem_bytes": 6973941248,
+        "n_forward_calls": 32
+      },
+      "tokens_equal": true,
+      "speedup": 4.698002704732244
+    },
+    {
+      "input_len": 1024,
+      "output_len": 64,
+      "uncached": {
+        "latency_s": {
+          "mean": 14.13934190900054,
+          "std": 0.040558660631515475
+        },
+        "prefill_s": 0.19704262179993748,
+        "decode_s": 13.942299287200603,
+        "tokens_per_s": 4.5263775649459435,
+        "peak_mem_bytes": 10094518784,
+        "n_forward_calls": 64
+      },
+      "cached": {
+        "latency_s": {
+          "mean": 2.9756761249998815,
+          "std": 0.23849401186659483
+        },
+        "prefill_s": 0.1836905050000041,
+        "decode_s": 2.7919856199998776,
+        "tokens_per_s": 21.50771700666938,
+        "peak_mem_bytes": 8012457472,
+        "n_forward_calls": 64
+      },
+      "tokens_equal": true,
+      "speedup": 4.751640069364439
+    },
+    {
+      "input_len": 1024,
+      "output_len": 128,
+      "uncached": {
+        "latency_s": {
+          "mean": 28.855392616400014,
+          "std": 0.13310923054703086
+        },
+        "prefill_s": 0.19730086680001477,
+        "decode_s": 28.658091749599997,
+        "tokens_per_s": 4.435912610915263,
+        "peak_mem_bytes": 10548250112,
+        "n_forward_calls": 128
+      },
+      "cached": {
+        "latency_s": {
+          "mean": 5.643901493600515,
+          "std": 0.4003130484734215
+        },
+        "prefill_s": 0.19058723240013933,
+        "decode_s": 5.453314261200376,
+        "tokens_per_s": 22.6793469278541,
+        "peak_mem_bytes": 10199066624,
+        "n_forward_calls": 128
+      },
+      "tokens_equal": true,
+      "speedup": 5.112667655365434
+    }
+  ],
+  "model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "device": "cuda"
+}
