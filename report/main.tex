@@ -37,14 +37,14 @@ legal label set together with the patient-sentence identifiers that support the 
 explanations shown to users are generated deterministically from the label and the cited sentences,
 never by the model. We fine-tune Qwen2.5-1.5B-Instruct with a low-rank adapter on the TrialGPT
 criterion annotations~\cite{jin2024trialgpt} and evaluate classification and evidence quality on a
-patient-level split: validation accuracy rises from $1.5\%$ (base) to $70.4\%$ (fine-tuned), test
-accuracy from $1.9\%$ to $71.4\%$, while macro-F1 stays near $0.37$ because the adapter never emits
-the three rarest labels. The KV-cached decoder reproduces the Hugging Face baseline byte-for-byte on
+patient-level split: validation accuracy rises from $1.5\%$ (base) to $70.4\%$ (fine-tuned) and test
+accuracy from $1.9\%$ to $71.4\%$, yet macro-F1 stays at $0.34$ and $0.37$ because the adapter never
+emits the three rarest labels. The KV-cached decoder reproduces the Hugging Face baseline byte-for-byte on
 all 206 validation records. On top of the fine-tuned model we implement three inference components from
 scratch: an explicit KV-cache decoding loop with a loop-free reference, a tiled attention kernel
 with an online softmax~\cite{milakov2018online,dao2022flashattention}, and greedy speculative
 decoding with a 0.5B draft model~\cite{leviathan2023speculative,chen2023speculative}. All three are
-tested for exact equivalence against their references and benchmarked on a T4 GPU. The KV-cached
+tested for equivalence against their references and benchmarked on a T4 GPU. The KV-cached
 decoder is token-identical to the framework baseline and $1.0$--$5.1\times$ faster; the tiled kernel
 matches the reference within fp16 tolerance but is slower than fused SDPA while using six times less
 memory at 2{,}048 tokens; greedy speculative decoding is lossless yet $1.5\times$ slower on this GPU
@@ -274,8 +274,9 @@ before generation.
 \section{Experimental Setup and Metrics}
 All fine-tuning and evaluation runs use the T4 GPU available in Colab; local development and unit
 tests run on CPU with tiny random Qwen2 models. Generation is greedy with at most 128 new tokens.
-Classification is reported per criterion type with macro-averaged precision, recall and F1, plus a
-confusion matrix; evidence quality is reported with micro and macro precision, recall and F1, where
+Classification is reported over the six legal labels and per criterion type with macro-averaged
+precision, recall and F1, plus a confusion matrix; evidence quality is reported with micro and macro
+precision, recall and F1, where
 an empty gold set counts as correct only for an empty prediction. Decoding benchmarks report
 latency split into prefill and decode, peak allocated memory and forward-call counts; attention
 benchmarks compare against a full-matrix fp32 reference and PyTorch SDPA; speculative decoding
@@ -479,8 +480,8 @@ lossless on every prompt (0 mismatches over eight prompts and 1{,}024 generated 
 independent Hugging Face \texttt{assistant\_model} check matches on the full 16-token prefix it
 produces. Acceptance is high ($82\%$ at $\gamma=2$), so the draft and target mostly agree.
 
-The speedup, however, is negative: all three settings are $1.5$--$1.6\times$ \emph{slower} than plain
-cached decoding ($0.64$--$0.68\times$). The reason is hardware-specific: the 0.5B draft is only about
+The speedup, however, is negative: all three settings are roughly $1.5\times$ \emph{slower} than
+plain cached decoding ($0.64$--$0.68\times$). The reason is hardware-specific: the 0.5B draft is only about
 three times cheaper per forward than the 1.5B target, and our loop runs $\gamma$ sequential draft
 steps per verification round, then only one target pass. On a T4 the draft steps plus the Python
 loop overhead cost more than the saved target passes, even though acceptance is high. Batched or
@@ -541,8 +542,8 @@ screening, a deterministic report with a persistent disclaimer, and a live compa
 decoders. The fine-tune lifts validation accuracy from $1.5\%$ to $70.4\%$ and test accuracy from
 $1.9\%$ to $71.4\%$, with macro-F1 limited to $0.37$ by the collapsed rare labels. On the inference
 side, the hand-written KV cache is token-identical to the framework and up to $5.1\times$ faster,
-the tiled kernel is numerically exact but slower than fused SDPA while using six times less memory,
-and speculative decoding is lossless but $1.5\times$ slower on this GPU. Those three outcomes are
+the tiled kernel is accurate within fp16 tolerance but slower than fused SDPA while using six times
+less memory, and speculative decoding is lossless but about $1.5\times$ slower on this GPU. Those three outcomes are
 reported as measured: the exercise was to implement and verify the mechanisms, not to claim a
 speedup that the hardware does not deliver.
 
