@@ -205,3 +205,31 @@ definition rather than against itself. Unsupported SDPA backends are recorded as
   every proposal to be rejected and asserts exact target equality with zero acceptance;
   `test_partial_acceptance_matches_target` mixes accepted and rejected proposals and asserts exact
   equality with `0 < accepted < drafted`. Both fail on the old sign, so the regression is covered.
+
+## D21. Benchmark figures belong in `report/figures` (packaging bug) — 2026-11-08
+- **Symptom.** Job 5 wrote `bench_*.pdf` next to `bench_*.json` in `results/`, while the report includes
+  `figures/bench_*.pdf` and the README promised `report/figures/`.
+- **Cause.** `Benchmarker._figure_root()` served as the root for *both* the JSON and the figure, so
+  the real-run branch could only be `results/`.
+- **Fix.** Split it into `_results_root()` (JSON -> `results/`) and `_figure_root()` (figures ->
+  `report/figures/`); smoke runs still keep both under `checkpoints/smoke/`. The three job-5 PDFs were
+  moved with `git mv`; no benchmark was re-run.
+
+## D22. Job-1 log reconstruction and adapter provenance — 2026-11-08
+- **Situation.** The job-1 Colab session died after training and before `results/train_log.json` could
+  be pushed. The Drive adapter and the evaluations survived; only the log/curve were lost. The console
+  output of the final training cell was preserved in the notebook and is reproduced in the session
+  record.
+- **Decision.** Rebuild `results/train_log.json` by transcribing that console output exactly (loss,
+  grad-norm, learning rate, epoch, eval loss/runtime). Step numbers are derived deterministically,
+  not invented: 38 steps/epoch (603 rows / (batch 2 x accumulation 8), rounded up) and
+  `logging_steps = 5`, so train logs are at steps 5..35, 40..70, 80..110 and epoch-end evals at
+  38/76/114. The `0.1325` epoch value in the output confirms step 5 (`5/38 = 0.1316`), and `1.053`
+  confirms step 40 (`40/38 = 1.0526`).
+- **Why not retrain.** Re-running job 1 would produce a different adapter (the console output shows a
+  second run already differs from the first crashed one) and would silently invalidate jobs 3-5,
+  which are the primary results. Transcription keeps the evaluated adapter and the reported curve
+  tied to the same run.
+- **Provenance.** `PROGRESS.md` and the README results table both mark the log as reconstructed.
+  Epoch losses in the report were corrected to this run: 0.1349, 0.1170, 0.1227; train loss 0.1022;
+  runtime 697 s.

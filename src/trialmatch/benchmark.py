@@ -570,14 +570,18 @@ class Benchmarker:
             SpeculativePlotter.plot(document, self._figure_root() / "bench_speculative.pdf")
         else:
             raise ValueError(f"suite {suite!r} is not implemented yet")
-        path = self._figure_root() / f"bench_{suite}.json"
+        path = self._results_root() / f"bench_{suite}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
         return path
 
-    def _figure_root(self) -> Path:
+    def _results_root(self) -> Path:
         """Smoke artefacts stay in the git-ignored checkpoint dir; results/ is for real runs."""
         return c.CHECKPOINTS_DIR / "smoke" if self._smoke else c.RESULTS_DIR
+
+    def _figure_root(self) -> Path:
+        """Figures go to report/figures so the report can include them directly."""
+        return c.CHECKPOINTS_DIR / "smoke" if self._smoke else c.FIGURES_DIR
 
     def _attention_setup(self) -> tuple[torch.device, torch.dtype, c.BenchmarkConfig]:
         """Attention needs no weights, only a device, dtype and (tiny) grid."""

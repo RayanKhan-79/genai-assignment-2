@@ -200,8 +200,9 @@ uv run hf upload RayanKhan-79/genai-assignment-2 \
 ```
 
 The repository must match `constants.ADAPTER_REPO` (`RayanKhan-79/genai-assignment-2`); the app
-downloads it there when no local adapter is present. Model page:
-<https://huggingface.co/RayanKhan-79/genai-assignment-2>.
+downloads it there when no local adapter is present. **Set the repository to public** in its
+Hugging Face settings: a private repository returns HTTP 401 and the app silently falls back to the
+base model. Model page: <https://huggingface.co/RayanKhan-79/genai-assignment-2>.
 
 ### Local wiring checks (agent-side, never committed as results)
 
@@ -218,13 +219,13 @@ corresponding Colab job has run and the file is committed.
 
 | Item | Backing file | Status |
 |------|--------------|--------|
-| Fine-tuning log and curves | `results/train_log.json`, `report/figures/train_curves.pdf` | TODO(user) job 1 |
-| Validation, base vs fine-tuned | `results/val_base_hf.json`, `results/val_finetuned_hf.json` | TODO(user) job 3 |
-| Test, base vs fine-tuned (once) | `results/test_*.json`, `results/error_cases.md` | TODO(user) job 4 |
-| Decoding benchmark | `results/bench_decoding.json` | TODO(user) job 5 |
-| Attention benchmark | `results/bench_attention.json` | TODO(user) job 5 |
-| Speculative benchmark | `results/bench_speculative.json` | TODO(user) job 5 |
-| Adapter | <https://huggingface.co/RayanKhan-79/genai-assignment-2> | TODO(user) job 6 |
+| Fine-tuning log and curves | `results/train_log.json`, `report/figures/train_curves.pdf` | done (log reconstructed from the Colab console output, see `docs/DECISIONS.md` D22) |
+| Validation, base vs fine-tuned | `results/val_base_hf.json`, `results/val_finetuned_hf.json`, `val_finetuned_cached.json` | done |
+| Test, base vs fine-tuned (once) | `results/test_*.json`, `results/error_cases.md` | done |
+| Decoding benchmark | `results/bench_decoding.json` | done |
+| Attention benchmark | `results/bench_attention.json` | done |
+| Speculative benchmark | `results/bench_speculative.json` | done (lossless but 0.64–0.68× = slowdown) |
+| Adapter | <https://huggingface.co/RayanKhan-79/genai-assignment-2> | uploaded; **repository must be public** for the app download to work |
 | Demo video (5-7 min) | TODO(user) link | TODO(user) |
 | App screenshots | `report/figures/app_*.png` | TODO(user) |
 

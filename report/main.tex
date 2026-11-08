@@ -44,8 +44,12 @@ all 206 validation records. On top of the fine-tuned model we implement three in
 scratch: an explicit KV-cache decoding loop with a loop-free reference, a tiled attention kernel
 with an online softmax~\cite{milakov2018online,dao2022flashattention}, and greedy speculative
 decoding with a 0.5B draft model~\cite{leviathan2023speculative,chen2023speculative}. All three are
-tested for exact equivalence against their references and benchmarked on a T4 GPU. A Gradio
-application exposes screening, report export and a live decoder comparison.
+tested for exact equivalence against their references and benchmarked on a T4 GPU. The KV-cached
+decoder is token-identical to the framework baseline and $1.0$--$5.1\times$ faster; the tiled kernel
+matches the reference within fp16 tolerance but is slower than fused SDPA while using six times less
+memory at 2{,}048 tokens; greedy speculative decoding is lossless yet $1.5\times$ slower on this GPU
+despite $63$--$82\%$ acceptance. A Gradio application exposes screening, report export and a live
+decoder comparison.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -281,8 +285,8 @@ reports acceptance rate and speedup against the cached target on eight validatio
 
 \subsection{Fine-tuning and classification}
 Figure~\ref{fig:curves} shows the training and validation loss: the best validation loss is reached
-at epoch 2 ($0.1194$ versus $0.1334$ after epoch 1 and $0.1250$ after epoch 3), and that checkpoint
-is the adapter evaluated below. Table~\ref{tab:classification} compares the base and fine-tuned
+at epoch 2 ($0.1170$ versus $0.1349$ after epoch 1 and $0.1227$ after epoch 3), and that checkpoint
+is the adapter evaluated below. The run took 697\,s on the T4 (train loss $0.1022$). Table~\ref{tab:classification} compares the base and fine-tuned
 models on validation, and Table~\ref{tab:test} reports the single test pass.
 
 The base model does not follow the task at all: on validation it never emits an inclusion label and
@@ -400,18 +404,26 @@ App.\ vs.\ insufficient info & 3 & ann.\ 422 \\
 
 \subsection{Decoding benchmarks}
 Table~\ref{tab:decoding} and Figure~\ref{fig:decoding} compare uncached and cached greedy decoding
-over input and output lengths. \pending{state the measured speedup and the token-equality result
-from \texttt{results/bench\_decoding.json}.}
+over the $3\times3$ grid of input and output lengths. All nine grid points are token-identical, which
+is the expected result for greedy decoding and confirms the hand-written loop. The cache pays off as
+the prompt grows: at 128 input tokens the speedup is only $1.04$--$1.18\times$ because prefill
+dominates and each cached step still launches a forward pass, while at 1{,}024 input tokens and 128
+new tokens it reaches $5.11\times$ ($28.86$\,s versus $5.64$\,s). Across the grid the speedup ranges
+from $1.04\times$ to $5.11\times$, and peak allocated memory grows with the cache up to $9.5$\,GB at
+the longest setting.
 
 \begin{table}[t]
 \centering
-\caption{Decoding latency (seconds, mean of repeated runs).}
+\caption{Decoding latency (seconds, mean of repeated runs; three representative grid points of
+nine, all token-identical).}
 \label{tab:decoding}
-\begin{tabular}{rrcc}
+\begin{tabular}{rrccc}
 \toprule
-Input & Output & Uncached & Cached \\
+Input & Output & Uncached & Cached & Speedup \\
 \midrule
-\pending{} & \pending{} & \pending{} & \pending{} \\
+128 & 32 & 1.431 & 1.314 & 1.09$\times$ \\
+512 & 128 & 16.804 & 5.545 & 3.03$\times$ \\
+1024 & 128 & 28.855 & 5.644 & 5.11$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -425,18 +437,30 @@ Input & Output & Uncached & Cached \\
 
 \subsection{Attention benchmarks}
 Table~\ref{tab:attention} and Figure~\ref{fig:attention} compare the reference, the tiled kernel and
-the available SDPA backends. \pending{report which backends the T4 exposes and the measured error
-of the tiled kernel against the fp32 reference from \texttt{results/bench\_attention.json}.}
+the available SDPA backends. On the T4 (sm\_75) PyTorch exposes the math and memory-efficient SDPA
+backends; the FlashAttention kernel is reported unsupported because it requires sm80 or newer. The
+tiled kernel agrees with the reference within $2.1\times10^{-3}$ maximum absolute error in fp16
+(tolerance $10^{-2}$), so the online softmax is numerically correct. It is nevertheless much slower
+in wall-clock time --- $0.285$\,s versus $0.005$\,s at 2{,}048 tokens --- because each key block is a
+separate Python-level operation with no fused SRAM kernel, exactly the overhead FlashAttention was
+designed to remove. Its purpose here is memory: at 2{,}048 tokens it peaks at $26$\,MiB versus
+$158$\,MiB for the full-matrix reference and $336$\,MiB for SDPA math, because it never materialises
+the $T\times T$ score matrix. The memory-efficient SDPA backend is both faster ($0.9$\,ms) and
+smaller ($18$\,MiB), which is the honest comparison point.
 
 \begin{table}[t]
 \centering
-\caption{Attention latency and maximum absolute error versus the fp32 reference.}
+\caption{Attention latency (seconds) and tiled-kernel maximum absolute error versus the fp32
+reference (fp16 inputs; FlashAttention unsupported on sm\_75).}
 \label{tab:attention}
-\begin{tabular}{rrccc}
+\begin{tabular}{rcccc}
 \toprule
 Length & Reference & Tiled & SDPA (best) & Max error \\
 \midrule
-\pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+256 & 0.0006 & 0.0075 & 0.0002 & $2.1\times10^{-3}$ \\
+512 & 0.0005 & 0.0237 & 0.0002 & $1.9\times10^{-3}$ \\
+1024 & 0.0012 & 0.0903 & 0.0004 & $1.4\times10^{-3}$ \\
+2048 & 0.0046 & 0.2848 & 0.0009 & $2.1\times10^{-3}$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -450,20 +474,32 @@ Length & Reference & Tiled & SDPA (best) & Max error \\
 
 \subsection{Speculative decoding}
 Table~\ref{tab:speculative} and Figure~\ref{fig:speculative} report acceptance rate, forward-call
-counts and speedup or slowdown against the cached target. \pending{interpret the result: if the
-draft is slower than the target on this hardware, say so and explain why.}
+counts and the change in latency against the cached target. The hand-written draft/verify loop is
+lossless on every prompt (0 mismatches over eight prompts and 1{,}024 generated tokens), and the
+independent Hugging Face \texttt{assistant\_model} check matches on the full 16-token prefix it
+produces. Acceptance is high ($82\%$ at $\gamma=2$), so the draft and target mostly agree.
+
+The speedup, however, is negative: all three settings are $1.5$--$1.6\times$ \emph{slower} than plain
+cached decoding ($0.64$--$0.68\times$). The reason is hardware-specific: the 0.5B draft is only about
+three times cheaper per forward than the 1.5B target, and our loop runs $\gamma$ sequential draft
+steps per verification round, then only one target pass. On a T4 the draft steps plus the Python
+loop overhead cost more than the saved target passes, even though acceptance is high. Batched or
+fused drafting, a smaller draft, or a target/draft pair with a larger cost gap would be needed to
+turn the acceptance rate into wall-clock speedup; we report the slowdown rather than hiding it.
+$\gamma=2$ is the least bad setting, which is consistent with the draft cost dominating.
 
 \begin{table}[t]
 \centering
-\caption{Speculative decoding on eight validation prompts.}
+\caption{Speculative decoding on eight validation prompts (fixed 128-token budget; cached target
+baseline 4.812\,s, $26.6$ tokens/s; every row token-identical).}
 \label{tab:speculative}
 \begin{tabular}{cccccc}
 \toprule
 $\gamma$ & Acceptance & Target calls & Draft calls & Latency (s) & Speedup \\
 \midrule
-2 & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
-4 & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
-6 & \pending{} & \pending{} & \pending{} & \pending{} & \pending{} \\
+2 & 0.820 & 395 & 1071 & 7.036 & 0.68$\times$ \\
+4 & 0.698 & 280 & 1240 & 7.340 & 0.66$\times$ \\
+6 & 0.632 & 224 & 1390 & 7.577 & 0.64$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -502,8 +538,13 @@ We fine-tuned a 1.5B instruction model for criterion-level trial screening with 
 contract, implemented KV-cached decoding, tiled attention and speculative decoding from scratch, and
 verified each against a reference before benchmarking it. The resulting application exposes
 screening, a deterministic report with a persistent disclaimer, and a live comparison of the three
-decoders. \pending{close with the headline fine-tuning and inference numbers once the Colab jobs
-have run.}
+decoders. The fine-tune lifts validation accuracy from $1.5\%$ to $70.4\%$ and test accuracy from
+$1.9\%$ to $71.4\%$, with macro-F1 limited to $0.37$ by the collapsed rare labels. On the inference
+side, the hand-written KV cache is token-identical to the framework and up to $5.1\times$ faster,
+the tiled kernel is numerically exact but slower than fused SDPA while using six times less memory,
+and speculative decoding is lossless but $1.5\times$ slower on this GPU. Those three outcomes are
+reported as measured: the exercise was to implement and verify the mechanisms, not to claim a
+speedup that the hardware does not deliver.
 
 \section*{AI-Use Appendix}
 This project was built with heavy AI assistance, documented honestly in \texttt{docs/AI\_USE.md}.

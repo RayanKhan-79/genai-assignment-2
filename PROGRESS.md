@@ -1,12 +1,12 @@
 # PROGRESS
 
-Last updated: 2026-11-08T18:30 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-08T19:20 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
-Job 5 was blocked by a `Cache.crop` bug (transformers 5 wants a negative count); fixed in the speculative-crop commit,
-user re-runs the three suites. Jobs 3-4 results are ingested and the validation/test tables plus the
-error discussion in `report/main.tex` are filled. After job 5: fill the three benchmark tables and
-figures, fix the abstract numbers, then final R1-R10 audit.
+All Colab jobs (1, 3, 4, 5, 6) are done and every result table/figure in `report/main.tex` is now
+filled from `results/`. Remaining: the user makes the HF adapter repo public, adds the two app
+screenshots and the video link, compiles on Overleaf; then the agent runs the final R1-R10 audit,
+cleans the tree and tags the submission.
 
 ## Results ingested (jobs 1, 3, 4)
 
@@ -22,6 +22,14 @@ figures, fix the abstract numbers, then final R1-R10 audit.
   (hand-written KV cache == `model.generate` on the real fp16 model).
 - Fine-tuned model never predicts `not included`, `not applicable` or `excluded`; base model predicts
   only `not applicable` and `excluded` (plus one `not included` on test).
+- Job 5 (T4, fp16): decoding is token-identical on all 9 grid points, speedup 1.04-5.11x; attention
+  tiled max error <=2.1e-3, 26 MiB vs 158 MiB reference at 2048 but 62x slower, FlashAttention
+  unsupported on sm_75, SDPA efficient fastest; speculative is lossless (0 mismatches) with
+  acceptance 0.82/0.70/0.63 but latency 7.04/7.34/7.58 s vs 4.81 s baseline (0.64-0.68x).
+- Job-5 figures were written to `results/` by the old `_figure_root`; fixed to `report/figures/`
+  and the three PDFs moved there.
+- HF adapter repo `RayanKhan-79/genai-assignment-2` returns HTTP 401: it is private. It must be made
+  public or the app download silently falls back to the base model.
 - Error dump: 92 cases (wrong_label 56, missing_evidence 16, unsupported_evidence 9, extra_evidence
   8, not_applicable_vs_not_enough_information 3).
 
@@ -36,7 +44,7 @@ figures, fix the abstract numbers, then final R1-R10 audit.
 | 6 Speculative decoding | done | f7f6a12 / `phase-6-done` | draft/verify loop with cache re-sync, 13 tests, benchmark suite |
 | 7 Application | done | 8365cf6 / `phase-7-done` | pipeline + report exporter + Gradio app, smoke green |
 | 8 Long-running jobs | done (docs) | ba558b7 | jobs 1-6 in README + Awaiting user; user runs them |
-| 9 Report + docs + hygiene | in progress | 66a850b | skeleton, refs, ARCHITECTURE, AI_USE, README, evidence-tied explanations done; numbers await jobs 3-6 |
+| 9 Report + docs + hygiene | nearly done | e979e08 | all tables/figures filled from `results/`; only app screenshots + video link (user) remain |
 
 ## Checklist state
 ### Phase 1
@@ -180,6 +188,15 @@ figures, fix the abstract numbers, then final R1-R10 audit.
 - None yet.
 
 ## Session log (append-only, newest last)
+- 2026-11-08T19:20 opencode: Ingested job 5 (decoding/attention/speculative) and filled every
+  benchmark table and interpretation in the report from `results/bench_*.json`. Decoding: all nine
+  grid points token-equal, 1.04-5.11x. Attention: tiled error <=2.1e-3, 26 vs 158 MiB at 2048 but
+  62x slower than the reference; FlashAttention unsupported on sm_75; SDPA efficient fastest.
+  Speculative: lossless (0 mismatches, HF assistant prefix matches) but 0.64-0.68x, an honest
+  slowdown. Found and fixed a packaging bug: benchmark figures were written to `results/` instead of
+  `report/figures/`; moved the three PDFs. Reconstructed the job-1 log from the console output the
+  user supplied (second run: eval 0.1349/0.1170/0.1227, 697 s) and regenerated the curve; corrected
+  the report's epoch numbers. The HF adapter repo is private (401) and must be made public.
 - 2026-11-08T18:30 opencode: Ingested jobs 1, 3 and 4 from `origin/main` (commit `bd49b03`) and filled
   the validation/test classification, evidence and error tables in `report/main.tex` from
   `results/*.json` only. Fixed the job-5 crash: local tests had never exercised a rejected draft, so
