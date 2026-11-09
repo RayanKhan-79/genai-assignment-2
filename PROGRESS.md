@@ -1,6 +1,6 @@
 # PROGRESS
 
-Last updated: 2026-11-08T19:20 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-09T11:30 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
 All Colab jobs (1, 3, 4, 5, 6) are done and every result table/figure in `report/main.tex` is now
@@ -125,11 +125,9 @@ cleans the tree and tags the submission.
 ## Awaiting user (jobs only the user can run / things needed)
 **Everything the agent can do is done (commit `79db646`). Three user-only items remain:**
 
-1. **Make the HF adapter repository public.** `https://huggingface.co/RayanKhan-79/genai-assignment-2`
-   currently returns HTTP 401 on both the model API and `resolve/main/adapter_config.json`. Job 6
-   uploaded the files, but a private repo makes `trialmatch.app` fall back to the base model.
-   Fix: HF -> the repo -> Settings -> Change visibility -> Public. Then confirm these URLs return 200:
-   `.../resolve/main/adapter_config.json` and `.../resolve/main/adapter_model.safetensors`.
+1. [x] **HF adapter repository public.** Verified 2026-11-09: the model API returns 200 and
+   `checkpoints/adapter` was downloaded locally (adapter_config.json + 74 MB adapter_model.safetensors).
+   Job 6 is complete; the app now loads the fine-tuned adapter.
 2. **Two app screenshots** -> `report/figures/app_screening.png` (screening tab with results) and
    `app_benchmark.png` (benchmark tab). Run `uv run python -m trialmatch.app` locally.
 3. **Overleaf compile + video.** Compile `report/main.tex` (the last red `TODO(user)` is only the
@@ -143,4 +141,4 @@ cleans the tree and tags the submission.
 - [x] Job 3 - validation eval: `val_{base,finetuned}_hf.json`, `val_finetuned_cached.json` (cached == hf byte-identical on 206/206).
 - [x] Job 4 - test eval once (`--final`): `test_{base,finetuned}_hf.json`, `results/error_cases.md` (92 cases).
 - [x] Job 5 - all three benchmark suites: `bench_{decoding,attention,speculative}.json`; figures moved to `report/figures/` (D21).
-- [x] Job 6 - adapter upload reported as done by the user; contents cannot be verified while the repo returns 401.
+- [x] Job 6 - adapter uploaded and the repository made public; verified 2026-11-09 (`/api/models` -> 200) and downloaded into `checkpoints/adapter`.

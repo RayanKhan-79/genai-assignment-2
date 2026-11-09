@@ -72,6 +72,11 @@ uv run python -m trialmatch.app --adapter checkpoints/adapter    # explicit loca
   missing-information list. **Download Markdown report** saves the report; an HTML copy is written
   next to it under `checkpoints/reports/`, with the disclaimer, aggregation rule and provenance
   block.
+- **Apple GPU out of memory.** An 8 GB Apple Silicon Mac cannot hold the 1.5B model in fp32 (about
+  6 GB) plus activations and the KV cache inside the MPS working set, and MPS reports
+  `Insufficient Memory (kIOGPUCommandBufferCallbackErrorOutOfMemory)`. Run
+  `uv run python -m trialmatch.app --device cpu` instead; the app now appends that hint to the
+  error. Close other GPU apps first either way.
 - **Benchmark tab.** Runs all three decoders on the first criterion of the current input and shows
   latency, tokens/s, forward calls, peak memory, acceptance rate (speculative) and whether the
   tokens match the uncached baseline, plus latency/throughput charts. The accordion below renders
@@ -200,9 +205,10 @@ uv run hf upload RayanKhan-79/genai-assignment-2 \
 ```
 
 The repository must match `constants.ADAPTER_REPO` (`RayanKhan-79/genai-assignment-2`); the app
-downloads it there when no local adapter is present. **Set the repository to public** in its
-Hugging Face settings: a private repository returns HTTP 401 and the app silently falls back to the
-base model. Model page: <https://huggingface.co/RayanKhan-79/genai-assignment-2>.
+downloads it there when no local adapter is present. The repository is **public** (verified
+2026-11-09: the model API returns 200), which the app requires — a private repository returns
+HTTP 401 and the app would silently fall back to the base model. Model page:
+<https://huggingface.co/RayanKhan-79/genai-assignment-2>.
 
 ### Local wiring checks (agent-side, never committed as results)
 
@@ -225,7 +231,7 @@ corresponding Colab job has run and the file is committed.
 | Decoding benchmark | `results/bench_decoding.json` | done |
 | Attention benchmark | `results/bench_attention.json` | done |
 | Speculative benchmark | `results/bench_speculative.json` | done (lossless but 0.64–0.68× = slowdown) |
-| Adapter | <https://huggingface.co/RayanKhan-79/genai-assignment-2> | uploaded; **repository must be public** for the app download to work |
+| Adapter | <https://huggingface.co/RayanKhan-79/genai-assignment-2> | uploaded and public (verified 2026-11-09); downloaded to `checkpoints/adapter` |
 | Demo video (5-7 min) | TODO(user) link | TODO(user) |
 | App screenshots | `report/figures/app_*.png` | TODO(user) |
 

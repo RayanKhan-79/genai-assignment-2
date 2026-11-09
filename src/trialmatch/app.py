@@ -43,6 +43,19 @@ BENCH_HEADERS = [
 ]
 
 
+def _failure(prefix: str, error: Exception) -> str:
+    """Format a UI failure, adding a fallback hint when the accelerator is out of memory."""
+    message = f"{prefix}: {error}"
+    lowered = str(error).lower()
+    if any(token in lowered for token in ("out of memory", "outofmemory", "insufficient memory")):
+        message += (
+            " — the GPU is out of memory. Restart with "
+            "`uv run python -m trialmatch.app --device cpu`: the 1.5B model in fp32 (about 6 GB) "
+            "plus activations and the KV cache does not fit an 8 GB Apple GPU's working set."
+        )
+    return message
+
+
 class ScreeningApp:
     """Owns the lazily loaded models, the pipelines and the Gradio Blocks layout."""
 
@@ -162,7 +175,7 @@ class ScreeningApp:
                 status,
             )
         except Exception as error:  # UI boundary: never show a stack trace
-            return [], "", "", "", None, f"Could not screen: {error}"
+            return [], "", "", "", None, _failure("Could not screen", error)
 
     # ------------------------------------------------------------------ benchmark tab
     def benchmark(
@@ -232,7 +245,7 @@ class ScreeningApp:
                 ),
             )
         except Exception as error:  # UI boundary
-            return [], None, f"Could not benchmark: {error}"
+            return [], None, _failure("Could not benchmark", error)
 
     def view_benchmark(self, name: str) -> str:
         """Render a stored ``results/bench_*.json`` document as Markdown."""
