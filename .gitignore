@@ -27,3 +27,4 @@ checkpoints/
 # Local notebooks / scratch
 .ipynb_checkpoints/
 scratch/
+.gradio/

@@ -555,7 +555,7 @@ def main() -> None:
     if args.smoke:
         app.run_smoke()
         return
-    app.build().launch()
+    app.build().launch(share=True)
 
 
 if __name__ == "__main__":
