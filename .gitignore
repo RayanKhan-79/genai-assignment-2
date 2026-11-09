@@ -28,3 +28,6 @@ checkpoints/
 .ipynb_checkpoints/
 scratch/
 .gradio/
+
+# Overleaf export archive (report/ itself is tracked)
+/report.zip

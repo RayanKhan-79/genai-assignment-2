@@ -58,7 +58,8 @@ what the human author did, and about how every AI-generated claim is checked.
 - AI-generated code can be subtly wrong even with green tests; the equivalence tests target the
   places where this is most likely (cache positions, masking, speculative cache re-sync), but they
   are not a proof.
-- The report skeleton contains explicit `TODO(user)` markers; red placeholder text is intentional
-  and must be removed before submission, together with screenshots and the video link.
+- The report skeleton originally contained explicit `TODO(user)` markers. Every one was replaced
+  with a value backed by `results/` before submission; the human author supplied the screenshots and
+  the video link, and compiled the final PDF on Overleaf.
 - Any AI suggestion that could not be verified was either removed or logged as a decision in
   `docs/DECISIONS.md` rather than silently kept.

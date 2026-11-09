@@ -62,6 +62,9 @@ uv run python -m trialmatch.app --adapter checkpoints/adapter    # explicit loca
 - **First load is the slow part.** The fine-tuned 1.5B target (about 6 GB in fp32 on CPU) is loaded
   lazily on the first screening request: roughly 1-2 min on a CUDA T4 and 2-4 min on CPU; later
   requests reuse it. Nothing is downloaded until then.
+- **Public link.** `launch(share=True)` always opens a temporary `*.gradio.live` tunnel, which is
+  required in Colab because `127.0.0.1` there is not reachable from your browser. The link lives as
+  long as the process.
 - **Adapter resolution.** The app uses `--adapter`, else `checkpoints/adapter`, else downloads
   `RayanKhan-79/genai-assignment-2` into `checkpoints/adapter`. If none is reachable it runs the
   base model and says so in the status line.
@@ -220,8 +223,8 @@ uv run python -m trialmatch.app --smoke                         # both UI tabs, 
 
 ## Results
 
-Every number in the report comes from a file listed here; the table stays `TODO(user)` until the
-corresponding Colab job has run and the file is committed.
+Every number in the report comes from a file listed here, and every row is backed by committed
+outputs.
 
 | Item | Backing file | Status |
 |------|--------------|--------|
@@ -232,8 +235,9 @@ corresponding Colab job has run and the file is committed.
 | Attention benchmark | `results/bench_attention.json` | done |
 | Speculative benchmark | `results/bench_speculative.json` | done (lossless but 0.64–0.68× = slowdown) |
 | Adapter | <https://huggingface.co/RayanKhan-79/genai-assignment-2> | uploaded and public (verified 2026-11-09); downloaded to `checkpoints/adapter` |
-| Demo video (5-7 min) | TODO(user) link | TODO(user) |
+| Demo video (5-7 min) | <https://youtu.be/yUuS7Mjtd4U> | done |
 | App screenshots | `report/figures/app_screening.png`, `app_benchmark.png` | done (Colab T4, fine-tuned adapter) |
+| Compiled report | `report/main.pdf` | done (Overleaf, 7 pages) |
 | Example exported report | `results/app_report_example.md` | done (screening run shown in Figure 5) |
 
 The split manifest is `splits/split_manifest.json` (37/8/8 patients, seed 42) and the truncation

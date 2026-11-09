@@ -1,6 +1,6 @@
 # PROGRESS
 
-Last updated: 2026-11-09T12:20 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-09T13:05 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
 All Colab jobs (1, 3, 4, 5, 6) are done and every result table/figure in `report/main.tex` is now
@@ -120,7 +120,7 @@ cleans the tree and tags the submission.
 - [x] `docs/DECISIONS.md`, `docs/AI_USE.md`, README complete — README has jobs 1-6, results table, app section.
 - [x] Final gate green, clean tree, no weights committed — 77 tests, `mypy --strict` clean, no `.safetensors`/`.bin` tracked (checked 2026-11-08).
 - [x] Fill report numbers from `results/*.json`, interpret every figure/table, finish error analysis (jobs 3-5 ingested).
-- [ ] Last `TODO(user)` in `report/main.tex` (two app screenshots) replaced after the user supplies them; then tag `submission`.
+- [x] Last `TODO(user)` in `report/main.tex` (two app screenshots) replaced after the user supplied them; `submission` tag created 2026-11-09.
 
 ## Awaiting user (jobs only the user can run / things needed)
 **Everything the agent can do is done (commit `79db646`). Three user-only items remain:**
@@ -132,9 +132,9 @@ cleans the tree and tags the submission.
    (Colab T4, fine-tuned adapter, KV-cached screening of four criteria). The exported Markdown report
    is kept as `results/app_report_example.md`. The report's Application subsection and Figure 5 now
    use them; no `\pending` remains in `report/main.tex`.
-3. **Overleaf compile + video.** Compile `report/main.tex` (no placeholders left), add the 5-7 min
-   video link to the README, and finalize `docs/AI_USE.md` if desired. Then ping the agent for the
-   R1-R10 audit and the `submission` tag.
+3. [x] **Overleaf compile + video delivered.** `report/main.pdf` (7 pages, no `TODO`), video at
+   <https://youtu.be/yUuS7Mjtd4U> (verified public via the YouTube oEmbed API). Both are in the
+   README results table. Tag `submission` created.
 
 ### Job status
 - [x] Job 1 - training done on Colab (3 epochs, eval loss 0.1349/0.1170/0.1227, train loss 0.1022, 697 s). Session died before the log was pushed; `results/train_log.json` reconstructed from the preserved console output (D22), `report/figures/train_curves.pdf` regenerated.
