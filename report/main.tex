@@ -513,16 +513,27 @@ $\gamma$ & Acceptance & Target calls & Draft calls & Latency (s) & Speedup \\
 \end{figure}
 
 \subsection{Application}
-Figure~\ref{fig:app} shows the screening tab and the live benchmark tab. \pending{insert the two
-screenshots taken by the user and describe the first-load time on CPU and GPU.}
+Figure~\ref{fig:app} shows the deployed prototype. The screening tab accepts a free-text or
+numbered note, up to forty inclusion and exclusion criteria (one per line) and a decoder
+choice. In the run shown, four criteria from the example trial are screened with the KV-cached
+decoder; the table reports the label, the cited sentence IDs, the quoted evidence and the
+deterministic explanation, and the outcome panel applies the documented aggregation rule. The
+benchmark tab runs all three decoders on the same prompt and confirms the pattern measured in the
+benchmarks above: the KV-cached and speculative decoders return exactly the tokens of the uncached
+baseline, while speculative decoding is slower and uses more memory on this GPU. The exported
+Markdown report repeats the disclaimer, the aggregation rule, every criterion and a provenance
+block naming the base model, adapter and decoder; an example is kept in
+\texttt{results/app\_report\_example.md}.
 
-\begin{figure}[t]
+\begin{figure*}[t]
 \centering
-\pendingfigure{figures/app_screening.png}{Screening tab screenshot (user).}
-\pendingfigure{figures/app_benchmark.png}{Benchmark tab screenshot (user).}
-\caption{The Gradio application.}
+\includegraphics[width=0.78\linewidth]{figures/app_screening.png}\\[2pt]
+\includegraphics[width=0.78\linewidth]{figures/app_benchmark.png}
+\caption{The Gradio application on the Colab T4. Top: screening tab with four criteria, the
+KV-cached decoder and the per-criterion results table. Bottom: live comparison of the three
+decoders on one prompt.}
 \label{fig:app}
-\end{figure}
+\end{figure*}
 
 \section{Limitations}
 The label distribution is highly imbalanced: only ten \texttt{excluded} and twenty-three

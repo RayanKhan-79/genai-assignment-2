@@ -233,7 +233,8 @@ corresponding Colab job has run and the file is committed.
 | Speculative benchmark | `results/bench_speculative.json` | done (lossless but 0.64–0.68× = slowdown) |
 | Adapter | <https://huggingface.co/RayanKhan-79/genai-assignment-2> | uploaded and public (verified 2026-11-09); downloaded to `checkpoints/adapter` |
 | Demo video (5-7 min) | TODO(user) link | TODO(user) |
-| App screenshots | `report/figures/app_*.png` | TODO(user) |
+| App screenshots | `report/figures/app_screening.png`, `app_benchmark.png` | done (Colab T4, fine-tuned adapter) |
+| Example exported report | `results/app_report_example.md` | done (screening run shown in Figure 5) |
 
 The split manifest is `splits/split_manifest.json` (37/8/8 patients, seed 42) and the truncation
 analysis is `results/truncation_report.json`.

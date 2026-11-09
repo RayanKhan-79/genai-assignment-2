@@ -38,20 +38,20 @@ Inclusion and exclusion keep their four categories each. `invalid` (unparseable 
 predicted value used only for scoring, never a training target.
 
 ## R1-R10 audit
-Filled at the end of Phase 9; each phase adds evidence below.
+Final audit 2026-11-09 (83 tests green); each phase added evidence before this.
 
 | Rule | Evidence |
 |------|----------|
-| R1 uv only | `uv.lock` + `pyproject.toml` committed; README lists only `uv` commands; only allowed `pip` use is `!pip install uv` in the Colab bootstrap cell. |
-| R2 annotations | `uv run mypy --strict src tests` green (Phase 1). |
-| R3 no globals | `grep -rn "\bglobal " src` empty; no mutable module state. |
-| R4 constants | `src/trialmatch/constants.py`; phased grep for literals. |
-| R5 no premature optimisation | baseline implementations first; any optimisation cites a measurement. |
-| R6 minimal code | `src/` kept small; library calls preferred except the three hand-written algorithms. |
-| R7 docs | Google docstrings everywhere, `ruff check --select D`, README + `docs/`. |
-| R8 no long jobs | only `--smoke` runs locally; six Colab jobs documented. |
-| R9 style | `ruff format` + `ruff check` clean. |
-| R10 classes | thin classes, frozen dataclass configs, `main()` only instantiates. |
+| R1 uv only | `uv.lock` + `pyproject.toml` committed (2026-11-09); README lists only `uv` commands; the only `pip` use is `!pip install uv` in the Colab bootstrap cell. |
+| R2 annotations | `uv run mypy --strict src tests` green, 23 files, 0 errors (2026-11-09). |
+| R3 no globals | `grep -rn "\bglobal " src` returns nothing; no mutable module state (module-level `Final` constants and frozen dataclasses only). |
+| R4 constants | every model name, path, label set, seed, tolerance and grid lives in `src/trialmatch/constants.py`; phased greps for `"Qwen`, `"results/`, `42` showed no literals outside it. |
+| R5 no premature optimisation | plain implementations first; the three hand-written algorithms are required by the brief, and the benchmark interpretations cite measurements (D21, D22). |
+| R6 minimal code | 4,127 lines in `src/` across 14 modules (2026-11-09); no dead code or speculative abstractions, but above the 1,200-line guideline — documented deviation D11. |
+| R7 docs | Google docstrings on every public object, `ruff check --select D` clean, README + `docs/ARCHITECTURE.md` + `docs/DECISIONS.md` + `docs/AI_USE.md`. |
+| R8 no long jobs | only `--smoke` runs locally; jobs 1-6 documented with commands and runtimes in README "Long-running jobs"; results came from the user's Colab runs. |
+| R9 style | `ruff format .` and `ruff check .` clean before every commit; 100 columns, double quotes, `from __future__ import annotations` in every module. |
+| R10 classes | thin classes and frozen dataclass configs; `main()` only instantiates. Private module-level helpers are limited to Markdown/plot formatting and the two app helpers (documented in D23). |
 
 ## D7. Prompt wording (Phase 3) — 2026-11-04
 The first template ended with `Use [] for evidence_ids when no sentence supports the label.`.

@@ -1,6 +1,6 @@
 # PROGRESS
 
-Last updated: 2026-11-09T11:55 by opencode / DeepSeek V4.1 Flash
+Last updated: 2026-11-09T12:20 by opencode / DeepSeek V4.1 Flash
 
 ## NEXT ACTION
 All Colab jobs (1, 3, 4, 5, 6) are done and every result table/figure in `report/main.tex` is now
@@ -128,12 +128,13 @@ cleans the tree and tags the submission.
 1. [x] **HF adapter repository public.** Verified 2026-11-09: the model API returns 200 and
    `checkpoints/adapter` was downloaded locally (adapter_config.json + 74 MB adapter_model.safetensors).
    Job 6 is complete; the app now loads the fine-tuned adapter.
-2. **Two app screenshots** -> `report/figures/app_screening.png` (screening tab with results) and
-   `app_benchmark.png` (benchmark tab). Run `uv run python -m trialmatch.app` locally.
-3. **Overleaf compile + video.** Compile `report/main.tex` (the last red `TODO(user)` is only the
-   screenshot note; `\pendingfigure` already draws placeholders so it compiles without them), add the
-   5-7 min video link to the README, and finalize `docs/AI_USE.md` if desired. Then ping the agent for
-   the R1-R10 audit and the `submission` tag.
+2. [x] **App screenshots delivered** -> `report/figures/app_screening.png` and `app_benchmark.png`
+   (Colab T4, fine-tuned adapter, KV-cached screening of four criteria). The exported Markdown report
+   is kept as `results/app_report_example.md`. The report's Application subsection and Figure 5 now
+   use them; no `\pending` remains in `report/main.tex`.
+3. **Overleaf compile + video.** Compile `report/main.tex` (no placeholders left), add the 5-7 min
+   video link to the README, and finalize `docs/AI_USE.md` if desired. Then ping the agent for the
+   R1-R10 audit and the `submission` tag.
 
 ### Job status
 - [x] Job 1 - training done on Colab (3 epochs, eval loss 0.1349/0.1170/0.1227, train loss 0.1022, 697 s). Session died before the log was pushed; `results/train_log.json` reconstructed from the preserved console output (D22), `report/figures/train_curves.pdf` regenerated.
