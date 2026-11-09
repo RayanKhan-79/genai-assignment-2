@@ -233,3 +233,16 @@ definition rather than against itself. Unsupported SDPA backends are recorded as
 - **Provenance.** `PROGRESS.md` and the README results table both mark the log as reconstructed.
   Epoch losses in the report were corrected to this run: 0.1349, 0.1170, 0.1227; train loss 0.1022;
   runtime 697 s.
+
+## D23. Force `MPLBACKEND=Agg` before Gradio imports matplotlib — 2026-11-09
+- **Symptom.** The first app request in Colab died in Gradio's queue with
+  `ValueError: Key backend: 'module://matplotlib_inline.backend_inline' is not a valid value`.
+- **Cause.** Colab exports that backend module, but `matplotlib-inline` is not installed in the `uv`
+  environment. Gradio wraps every request in `MatplotlibBackendMananger`, which imports matplotlib
+  and inherits `MPLBACKEND`; the plot helpers only fixed the variable when they ran, i.e. too late.
+  The exception is raised in the queue worker, so the UI shows no result.
+- **Fix.** `_force_agg_backend()` sets `MPLBACKEND = constants.MPL_BACKEND` at the start of
+  `ScreeningApp.build()`, before the server accepts requests. `_benchmark_figure` reuses it.
+- **Test.** `test_colab_backend_value_is_replaced` sets the Colab value, calls the helper and asserts
+  `Agg`. Verified locally that importing Gradio does not import matplotlib, so `build()` is early
+  enough.

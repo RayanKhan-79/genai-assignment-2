@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -41,6 +42,16 @@ BENCH_HEADERS = [
     "Acceptance rate",
     "Matches cached target",
 ]
+
+
+def _force_agg_backend() -> None:
+    """Point matplotlib at a static backend before Gradio imports it lazily.
+
+    Colab exports ``MPLBACKEND=module://matplotlib_inline.backend_inline``, but that module is not
+    installed in this virtual environment. Gradio imports matplotlib on the first request (and
+    restores the backend afterwards), so the invalid value must be replaced before the server runs.
+    """
+    os.environ["MPLBACKEND"] = c.MPL_BACKEND
 
 
 def _failure(prefix: str, error: Exception) -> str:
@@ -277,6 +288,8 @@ class ScreeningApp:
     # ------------------------------------------------------------------ layout
     def build(self) -> gr.Blocks:
         """Build the Blocks layout (components only; model loading stays lazy)."""
+        # Gradio wraps every request in a matplotlib backend manager; fix MPLBACKEND first.
+        _force_agg_backend()
         with gr.Blocks(title=c.APP_TITLE) as demo:
             gr.Markdown(f"# {c.APP_TITLE}")
             gr.Markdown(f"**{c.APP_DISCLAIMER}**")
@@ -445,9 +458,7 @@ def _raw_markdown(result: ScreeningResult) -> str:
 
 def _benchmark_figure(rows: list[list[Any]]) -> Any:
     """Build the two-panel latency/throughput figure for the benchmark tab."""
-    import os
-
-    os.environ["MPLBACKEND"] = c.MPL_BACKEND  # Colab's inline backend is not installed here
+    _force_agg_backend()
     import matplotlib
 
     matplotlib.use(c.MPL_BACKEND)

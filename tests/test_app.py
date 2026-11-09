@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from trialmatch import constants as c
-from trialmatch.app import ScreeningApp, _failure
+from trialmatch.app import ScreeningApp, _failure, _force_agg_backend
 
 
 def test_criteria_split_by_type() -> None:
@@ -40,3 +42,10 @@ def test_oom_failure_adds_cpu_hint() -> None:
 def test_other_failure_is_unchanged() -> None:
     """Ordinary errors are passed through without the GPU hint."""
     assert _failure("Could not screen", ValueError("empty note")) == "Could not screen: empty note"
+
+
+def test_colab_backend_value_is_replaced(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Colab's inline backend is not installed here; Gradio must find a static backend."""
+    monkeypatch.setenv("MPLBACKEND", "module://matplotlib_inline.backend_inline")
+    _force_agg_backend()
+    assert os.environ["MPLBACKEND"] == c.MPL_BACKEND
